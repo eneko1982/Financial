@@ -24,6 +24,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # Local env files
+.env
 .env*.local
 
 # Vercel
@@ -38,3 +39,4 @@ prisma/finance.db
 prisma/finance.db-journal
 prisma/*.db
 prisma/*.db-journal
+prisma/prisma/
