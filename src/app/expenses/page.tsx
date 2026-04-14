@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { formatCurrency } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils/cn";
 import { useQueryClient } from "@tanstack/react-query";
+import { CategoryEditor } from "@/components/transactions/CategoryEditor";
 
 type ViewType = "expense" | "income";
 
@@ -222,7 +223,11 @@ export default function ExpensesPage() {
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{new Date(tx.date).toLocaleDateString("es-ES")}</td>
                     <td className="px-4 py-3 max-w-[240px] truncate font-medium">{tx.description}</td>
                     <td className="px-4 py-3">
-                      {tx.category && <Badge variant="secondary" className="text-[10px]">{tx.category}</Badge>}
+                      <CategoryEditor
+                        transactionId={tx.id}
+                        currentCategory={tx.category ?? null}
+                        extraInvalidate={[["analytics", "categories"]]}
+                      />
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{tx.account?.name}</td>
                     <td className={cn("px-4 py-3 text-right font-mono font-semibold tabular-nums", tx.amount >= 0 ? "text-emerald-400" : "text-foreground")}>

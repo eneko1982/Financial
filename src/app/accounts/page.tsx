@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { formatCurrency } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils/cn";
+import { CategoryEditor } from "@/components/transactions/CategoryEditor";
 
 const BANK_COLORS: Record<string, string> = {
   BBVA: "#00A1E0", Santander: "#EC0000", CaixaBank: "#007AFF", ING: "#FF6200",
@@ -140,7 +141,7 @@ export default function AccountsPage() {
                       <p className="truncate font-medium">{tx.description}</p>
                     </td>
                     <td className="px-4 py-3">
-                      {tx.category && <Badge variant="secondary" className="text-[10px]">{tx.category}</Badge>}
+                      <CategoryEditor transactionId={tx.id} currentCategory={tx.category ?? null} />
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{tx.account?.name}</td>
                     <td className={cn("px-4 py-3 text-right font-mono font-semibold tabular-nums", tx.amount >= 0 ? "text-emerald-400" : "text-foreground")}>
