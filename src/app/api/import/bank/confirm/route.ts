@@ -10,26 +10,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: null, error: "Datos requeridos" }, { status: 400 });
   }
 
-  // Insertar una a una, ignorando duplicados por importHash único
-  let count = 0;
-  for (const tx of transactions) {
-    try {
-      await prisma.transaction.create({
-        data: {
-          accountId,
-          date: new Date(tx.date),
-          description: tx.description,
-          amount: tx.amount,
-          balance: tx.balance,
-          category: tx.suggestedCategory ?? "Sin categoría",
-          importHash: tx.importHash,
-        },
-      });
-      count++;
-    } catch {
-      // Conflicto de clave única (importHash duplicado) — se omite
-    }
-  }
+  // Bulk insert con skipDuplicates (PostgreSQL) — mucho más rápido que insertar una a una
+  const result = await prisma.transaction.createMany({
+    data: transactions.map((tx) => ({
+      accountId,
+      date: new Date(tx.date),
+      description: tx.description,
+      amount: tx.amount,
+      balance: tx.balance ?? null,
+      category: tx.suggestedCategory ?? "Sin categoría",
+      importHash: tx.importHash,
+    })),
+    skipDuplicates: true,
+  });
+  const count = result.count;
 
   // Guardar snapshot de patrimonio neto
   const accounts = await prisma.account.findMany({ where: { isActive: true } });
