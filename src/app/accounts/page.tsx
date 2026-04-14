@@ -1,16 +1,16 @@
 "use client";
 import { useState } from "react";
-import { Plus, Search, Filter } from "lucide-react";
+import { Plus, Search, Filter, MoreVertical, Pencil, Trash2 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
-import { useAccounts, useCreateAccount } from "@/hooks/useAccounts";
+import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useUIStore } from "@/store/uiStore";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { formatCurrency } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils/cn";
 
@@ -26,6 +26,9 @@ export default function AccountsPage() {
   const [category, setCategory] = useState("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editAccount, setEditAccount] = useState<{ id: string; name: string; bank: string; type: string } | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const deleteAccount = useDeleteAccount();
   const { setImportOpen } = useUIStore();
 
   const { data: txData } = useTransactions({
@@ -46,21 +49,39 @@ export default function AccountsPage() {
         {/* Account cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {accounts.map((acc) => (
-            <button
+            <div
               key={acc.id}
               onClick={() => setSelectedAccount(selectedAccount === acc.id ? "" : acc.id)}
               className={cn(
-                "rounded-xl border p-4 text-left transition-all hover:border-primary/50",
+                "rounded-xl border p-4 text-left transition-all hover:border-primary/50 cursor-pointer relative",
                 selectedAccount === acc.id ? "border-primary/70 bg-primary/5" : "border-border bg-card"
               )}
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: BANK_COLORS[acc.bank] ?? "#6366f1" }}>{acc.bank}</span>
-                <Badge variant="secondary" className="text-[10px]">{acc.type === "checking" ? "Corriente" : acc.type === "savings" ? "Ahorro" : acc.type}</Badge>
+                <div className="flex items-center gap-1">
+                  <Badge variant="secondary" className="text-[10px]">{acc.type === "checking" ? "Corriente" : acc.type === "savings" ? "Ahorro" : acc.type}</Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                      <button className="rounded p-0.5 hover:bg-muted transition-colors ml-1">
+                        <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-36" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                      <DropdownMenuItem onClick={() => setEditAccount({ id: acc.id, name: acc.name, bank: acc.bank, type: acc.type })}>
+                        <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-red-400 focus:text-red-400" onClick={() => setDeleteId(acc.id)}>
+                        <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
               <p className="text-sm text-muted-foreground truncate">{acc.name}</p>
               <p className={cn("text-xl font-bold tabular-nums mt-1", acc.balance >= 0 ? "text-foreground" : "text-red-400")}>{formatCurrency(acc.balance)}</p>
-            </button>
+            </div>
           ))}
           <button
             onClick={() => setCreateOpen(true)}
@@ -147,7 +168,75 @@ export default function AccountsPage() {
 
       </div>
       <AddAccountDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      {editAccount && (
+        <EditAccountDialog account={editAccount} onClose={() => setEditAccount(null)} />
+      )}
+      <Dialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>¿Eliminar cuenta?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Se desactivará la cuenta y no aparecerá en el dashboard. Las transacciones importadas se conservan.</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteId(null)}>Cancelar</Button>
+            <Button variant="destructive" disabled={deleteAccount.isPending} onClick={async () => {
+              if (deleteId) { await deleteAccount.mutateAsync(deleteId); setDeleteId(null); if (selectedAccount === deleteId) setSelectedAccount(""); }
+            }}>
+              {deleteAccount.isPending ? "Eliminando..." : "Eliminar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function EditAccountDialog({ account, onClose }: { account: { id: string; name: string; bank: string; type: string }; onClose: () => void }) {
+  const updateAccount = useUpdateAccount();
+  const [form, setForm] = useState({ name: account.name, type: account.type, bank: account.bank });
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await updateAccount.mutateAsync({ id: account.id, ...form });
+    onClose();
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Editar cuenta</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Nombre</label>
+            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Banco</label>
+              <Select value={form.bank} onValueChange={v => setForm(f => ({ ...f, bank: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["BBVA","Santander","CaixaBank","ING","Sabadell","Bankinter","Otro"].map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Tipo</label>
+              <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="checking">Corriente</SelectItem>
+                  <SelectItem value="savings">Ahorro</SelectItem>
+                  <SelectItem value="credit">Crédito</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" disabled={updateAccount.isPending}>{updateAccount.isPending ? "Guardando..." : "Guardar cambios"}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

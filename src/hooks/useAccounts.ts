@@ -21,3 +21,25 @@ export function useCreateAccount() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["accounts"] }),
   });
 }
+
+export function useUpdateAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...data }: Record<string, unknown> & { id: string }) => {
+      const res = await fetch(`/api/accounts/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["accounts"] }),
+  });
+}
+
+export function useDeleteAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/accounts/${id}`, { method: "DELETE" });
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["accounts"] }),
+  });
+}

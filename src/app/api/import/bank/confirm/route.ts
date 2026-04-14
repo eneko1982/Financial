@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Bulk insert con skipDuplicates (PostgreSQL) — mucho más rápido que insertar una a una
-  const result = await prisma.transaction.createMany({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await (prisma.transaction.createMany as any)({
     data: transactions.map((tx) => ({
       accountId,
       date: new Date(tx.date),
@@ -22,7 +23,7 @@ export async function POST(req: NextRequest) {
       importHash: tx.importHash,
     })),
     skipDuplicates: true,
-  });
+  }) as { count: number };
   const count = result.count;
 
   // Guardar snapshot de patrimonio neto

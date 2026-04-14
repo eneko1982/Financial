@@ -17,19 +17,27 @@ export async function GET() {
     orderBy: { createdAt: "asc" },
   });
 
-  // Attach current balance to each account
+  // Attach current balance to each account.
+  // Priority: 1) manual AccountBalance snapshot, 2) last transaction's "Disponible" running balance, 3) sum of amounts
   const withBalance = await Promise.all(
     accounts.map(async (acc) => {
-      const last = await prisma.accountBalance.findFirst({
+      const snapshot = await prisma.accountBalance.findFirst({
         where: { accountId: acc.id },
         orderBy: { date: "desc" },
       });
+      if (snapshot) return { ...acc, balance: snapshot.balance };
+
+      const lastTxWithBalance = await prisma.transaction.findFirst({
+        where: { accountId: acc.id, balance: { not: null } },
+        orderBy: { date: "desc" },
+      });
+      if (lastTxWithBalance?.balance != null) return { ...acc, balance: lastTxWithBalance.balance };
+
       const txSum = await prisma.transaction.aggregate({
         where: { accountId: acc.id },
         _sum: { amount: true },
       });
-      const balance = last?.balance ?? txSum._sum.amount ?? 0;
-      return { ...acc, balance };
+      return { ...acc, balance: txSum._sum.amount ?? 0 };
     })
   );
 
