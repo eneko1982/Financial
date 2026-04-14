@@ -10,13 +10,20 @@ export async function GET(req: NextRequest) {
   const start = startOfMonth(now);
   const end = endOfMonth(now);
 
+  const type = searchParams.get("type") ?? "expense"; // "expense" | "income"
+  const accountId = searchParams.get("accountId");
+
   const txs = await prisma.transaction.findMany({
-    where: { date: { gte: start, lte: end }, amount: { lt: 0 } },
+    where: {
+      date: { gte: start, lte: end },
+      amount: type === "income" ? { gt: 0 } : { lt: 0 },
+      ...(accountId ? { accountId } : {}),
+    },
   });
 
   const catMap: Record<string, number> = {};
   for (const tx of txs) {
-    const cat = tx.category ?? "Sin categoría";
+    const cat = tx.category ?? (type === "income" ? "Sin categoría" : "Sin categoría");
     catMap[cat] = (catMap[cat] ?? 0) + Math.abs(tx.amount);
   }
 

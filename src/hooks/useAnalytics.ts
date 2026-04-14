@@ -34,12 +34,14 @@ export function useCashFlow() {
   });
 }
 
-export function useCategories(month?: string) {
+export function useCategories(month?: string, type: "expense" | "income" = "expense", accountId?: string) {
   return useQuery({
-    queryKey: ["analytics", "categories", month],
+    queryKey: ["analytics", "categories", month, type, accountId],
     queryFn: async () => {
-      const url = month ? `/api/analytics/categories?month=${month}` : "/api/analytics/categories";
-      const res = await fetch(url);
+      const params = new URLSearchParams({ type });
+      if (month) params.set("month", month);
+      if (accountId) params.set("accountId", accountId);
+      const res = await fetch(`/api/analytics/categories?${params}`);
       const json = await res.json();
       return { data: json.data as CategorySpend[], total: json.meta?.total ?? 0 };
     },

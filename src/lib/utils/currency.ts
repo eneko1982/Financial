@@ -1,49 +1,40 @@
-const eurFormatter = new Intl.NumberFormat("es-ES", {
-  style: "currency",
-  currency: "EUR",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+/** Format a number as Spanish currency: 1234.56 → "1.234,56 €" */
+function spanishCurrency(amount: number): string {
+  const neg = amount < 0;
+  const [intPart, decPart] = Math.abs(amount).toFixed(2).split(".");
+  const intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${neg ? "-" : ""}${intFormatted},${decPart} €`;
+}
 
-const eurCompactFormatter = new Intl.NumberFormat("es-ES", {
-  style: "currency",
-  currency: "EUR",
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
-
-const pctFormatter = new Intl.NumberFormat("es-ES", {
-  style: "percent",
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 2,
-  signDisplay: "exceptZero",
-});
+/** Format a number as compact Spanish currency: 1234 → "1,2 K€" */
+function spanishCompact(amount: number): string {
+  const abs = Math.abs(amount);
+  const sign = amount < 0 ? "-" : "";
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1).replace(".", ",")} M€`;
+  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(1).replace(".", ",")} mil €`;
+  return spanishCurrency(amount);
+}
 
 export function formatCurrency(amount: number, compact = false): string {
-  return compact ? eurCompactFormatter.format(amount) : eurFormatter.format(amount);
+  return compact ? spanishCompact(amount) : spanishCurrency(amount);
 }
 
 export function formatPercent(value: number): string {
-  return pctFormatter.format(value / 100);
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(1).replace(".", ",")}%`;
 }
 
 export function formatChange(value: number): { text: string; positive: boolean } {
-  const positive = value >= 0;
-  return {
-    text: formatCurrency(Math.abs(value)),
-    positive,
-  };
+  return { text: spanishCurrency(Math.abs(value)), positive: value >= 0 };
 }
 
 /** Parse number string from either Spanish format "1.234,56" or plain JS "1234.56" */
 export function parseSpanishNumber(str: string): number {
   if (!str) return 0;
   const s = str.trim();
-  // If the string has a comma, it's Spanish format: "1.234,56" or "-53,90"
   if (s.includes(",")) {
     const cleaned = s.replace(/\./g, "").replace(",", ".").replace(/[^0-9.-]/g, "");
     return parseFloat(cleaned) || 0;
   }
-  // Otherwise treat as plain number (JS-formatted): "7020.15", "-53.9", "-100"
   return parseFloat(s.replace(/[^0-9.-]/g, "")) || 0;
 }
