@@ -13,7 +13,7 @@ export function parseBBVA(rows: Record<string, string>[]): ParserResult {
 
   for (const row of rows) {
     try {
-      const dateStr = row["F. Valor"] ?? row["Fecha valor"] ?? row["Fecha"] ?? row["Fecha operación"] ?? "";
+      const dateStr = row["F.Valor"] ?? row["F. Valor"] ?? row["Fecha valor"] ?? row["Fecha"] ?? row["Fecha operación"] ?? "";
       const desc = row["Concepto"] ?? row["Descripción"] ?? row["Descripcion"] ?? "";
       const amtStr = row["Importe"] ?? row["Importe (€)"] ?? row["Importe(€)"] ?? "";
       const balStr = row["Disponible"] ?? row["Saldo (€)"] ?? row["Saldo(€)"] ?? "";

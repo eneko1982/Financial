@@ -20,12 +20,50 @@ export async function POST(req: NextRequest) {
 
   if (file.name.endsWith(".csv")) {
     const text = buffer.toString("utf-8");
-    const result = Papa.parse<Record<string, string>>(text, { header: true, skipEmptyLines: true, dynamicTyping: false });
-    rows = result.data;
+    // Parse without headers first to detect and skip metadata rows
+    const rawResult = Papa.parse<string[]>(text, { header: false, skipEmptyLines: true, dynamicTyping: false });
+    const rawRows = rawResult.data;
+
+    // Find the actual header row: first row with at least 3 non-empty cells
+    let headerIdx = 0;
+    for (let i = 0; i < rawRows.length; i++) {
+      const nonEmpty = rawRows[i].filter((c) => String(c ?? "").trim() !== "").length;
+      if (nonEmpty >= 3) { headerIdx = i; break; }
+    }
+
+    const csvHeaders = rawRows[headerIdx].map((h) => String(h ?? "").trim());
+    rows = rawRows
+      .slice(headerIdx + 1)
+      .filter((row) => row.some((c) => String(c ?? "").trim() !== ""))
+      .map((row) => {
+        const obj: Record<string, string> = {};
+        csvHeaders.forEach((h, i) => { if (h) obj[h] = String(row[i] ?? "").trim(); });
+        return obj;
+      });
   } else {
     const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
     const ws = wb.Sheets[wb.SheetNames[0]];
-    rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws, { raw: false, defval: "" });
+
+    // Read as raw array-of-arrays to handle Excel files with metadata rows
+    // (e.g. BBVA exports have 3 rows of "Últimos movimientos / Fecha generación" before the real headers)
+    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: false, defval: "" }) as string[][];
+
+    // Find the actual header row: first row with at least 3 non-empty cells
+    let headerIdx = 0;
+    for (let i = 0; i < rawRows.length; i++) {
+      const nonEmpty = rawRows[i].filter((c) => String(c ?? "").trim() !== "").length;
+      if (nonEmpty >= 3) { headerIdx = i; break; }
+    }
+
+    const headers = rawRows[headerIdx].map((h) => String(h ?? "").trim());
+    rows = rawRows
+      .slice(headerIdx + 1)
+      .filter((row) => row.some((c) => String(c ?? "").trim() !== ""))
+      .map((row) => {
+        const obj: Record<string, string> = {};
+        headers.forEach((h, i) => { if (h) obj[h] = String(row[i] ?? "").trim(); });
+        return obj;
+      });
   }
 
   const { transactions, errors } = parseBank(rows, bankFormat);
