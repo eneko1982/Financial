@@ -14,7 +14,9 @@ import { formatCurrency } from "@/lib/utils/currency";
 import { parseSpanishNumber } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils/cn";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, TrendingUp, TrendingDown, ClipboardPaste } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, ClipboardPaste, Pencil, Trash2 } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { MoreVertical } from "lucide-react";
 
 const ASSET_COLORS: Record<string, string> = {
   stocks: "#22c55e", etf: "#3b82f6", bonds: "#f59e0b", crypto: "#a855f7", cash: "#06b6d4", other: "#6b7280",
@@ -29,7 +31,14 @@ export default function InvestmentsPage() {
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
   const [addOpen, setAddOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [editPos, setEditPos] = useState<(typeof positions)[0] | null>(null);
   const { setImportOpen } = useUIStore();
+  const qc = useQueryClient();
+
+  async function handleDelete(id: string) {
+    await fetch(`/api/investments/positions/${id}`, { method: "DELETE" });
+    qc.invalidateQueries({ queryKey: ["investments"] });
+  }
 
   // Allocation by asset class
   const allocationData = Object.entries(
@@ -132,6 +141,7 @@ export default function InvestmentsPage() {
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">Valor actual</th>
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">P&L</th>
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">Peso</th>
+                    <th className="px-2 py-3" />
                   </tr>
                 </thead>
                 <tbody>
@@ -155,6 +165,24 @@ export default function InvestmentsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right text-muted-foreground font-mono tabular-nums">{p.weight.toFixed(1)}%</td>
+                      <td className="px-2 py-3">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="rounded p-1 hover:bg-muted transition-colors">
+                              <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-36">
+                            <DropdownMenuItem onClick={() => setEditPos(p)}>
+                              <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-red-400 focus:text-red-400" onClick={() => handleDelete(p.id)}>
+                              <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
                     </tr>
                   ))}
                   {positions.length === 0 && (
@@ -169,6 +197,7 @@ export default function InvestmentsPage() {
       </div>
       <AddPositionDialog open={addOpen} onClose={() => setAddOpen(false)} />
       <BulkImportDialog open={bulkOpen} onClose={() => setBulkOpen(false)} />
+      {editPos && <EditPositionDialog position={editPos} onClose={() => setEditPos(null)} />}
     </div>
   );
 }
@@ -246,6 +275,86 @@ function AddPositionDialog({ open, onClose }: { open: boolean; onClose: () => vo
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Guardando..." : "Añadir posición"}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditPositionDialog({ position, onClose }: { position: { id: string; ticker: string; name: string; shares: number; averageCost: number; currentPrice: number | null; assetClass: string | null }; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    name: position.name,
+    shares: String(position.shares),
+    averageCost: String(position.averageCost),
+    currentPrice: position.currentPrice != null ? String(position.currentPrice) : "",
+    assetClass: position.assetClass ?? "stocks",
+  });
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    await fetch(`/api/investments/positions/${position.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: form.name,
+        shares: parseFloat(form.shares),
+        averageCost: parseFloat(form.averageCost),
+        currentPrice: form.currentPrice ? parseFloat(form.currentPrice) : null,
+        assetClass: form.assetClass,
+      }),
+    });
+    qc.invalidateQueries({ queryKey: ["investments"] });
+    setSaving(false);
+    onClose();
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Editar posición — <span className="font-mono text-primary">{position.ticker}</span></DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Nombre</label>
+              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Clase de activo</label>
+              <Select value={form.assetClass} onValueChange={v => setForm(f => ({ ...f, assetClass: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="stocks">Acciones</SelectItem>
+                  <SelectItem value="etf">ETF</SelectItem>
+                  <SelectItem value="bonds">Bonos</SelectItem>
+                  <SelectItem value="crypto">Cripto</SelectItem>
+                  <SelectItem value="other">Otro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Acciones</label>
+              <Input type="number" step="0.0001" value={form.shares} onChange={e => setForm(f => ({ ...f, shares: e.target.value }))} required />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Coste medio €</label>
+              <Input type="number" step="0.01" value={form.averageCost} onChange={e => setForm(f => ({ ...f, averageCost: e.target.value }))} required />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Precio actual €</label>
+              <Input type="number" step="0.01" placeholder="—" value={form.currentPrice} onChange={e => setForm(f => ({ ...f, currentPrice: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" disabled={saving}>{saving ? "Guardando..." : "Guardar cambios"}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
