@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: null, error: "Datos requeridos" }, { status: 400 });
   }
 
+  // Insertar una a una, ignorando duplicados por importHash único
   let count = 0;
   for (const tx of transactions) {
     try {
@@ -26,23 +27,34 @@ export async function POST(req: NextRequest) {
       });
       count++;
     } catch {
-      // Skip duplicates (unique constraint on importHash)
+      // Conflicto de clave única (importHash duplicado) — se omite
     }
   }
 
-  // Save net worth snapshot
+  // Guardar snapshot de patrimonio neto
   const accounts = await prisma.account.findMany({ where: { isActive: true } });
   let totalBank = 0;
   for (const acc of accounts) {
-    const txSum = await prisma.transaction.aggregate({ where: { accountId: acc.id }, _sum: { amount: true } });
+    const txSum = await prisma.transaction.aggregate({
+      where: { accountId: acc.id },
+      _sum: { amount: true },
+    });
     totalBank += txSum._sum.amount ?? 0;
   }
   const positions = await prisma.investmentPosition.findMany();
-  const portfolioValue = positions.reduce((s, p) => s + p.shares * (p.currentPrice ?? p.averageCost), 0);
+  const portfolioValue = positions.reduce(
+    (s, p) => s + p.shares * (p.currentPrice ?? p.averageCost),
+    0
+  );
   const totalAssets = totalBank + portfolioValue;
 
   await prisma.netWorthSnapshot.create({
-    data: { date: new Date(), totalAssets, netWorth: totalAssets, breakdown: JSON.stringify({ bank: totalBank, portfolio: portfolioValue }) },
+    data: {
+      date: new Date(),
+      totalAssets,
+      netWorth: totalAssets,
+      breakdown: JSON.stringify({ bank: totalBank, portfolio: portfolioValue }),
+    },
   });
 
   return NextResponse.json({ data: { count }, error: null });
