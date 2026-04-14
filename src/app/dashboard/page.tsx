@@ -56,9 +56,9 @@ export default function DashboardPage() {
             title="Tasa de Ahorro"
             value={`${(summary?.savingsRate ?? 0).toFixed(1)}%`}
             change={summary?.savingsRateChange}
-            changeLabel="vs mes anterior"
+            changeLabel="mes anterior"
             icon={<PiggyBank className="h-4 w-4 text-muted-foreground" />}
-            accent={(summary?.savingsRate ?? 0) >= 20 ? "profit" : (summary?.savingsRate ?? 0) < 10 ? "loss" : "neutral"}
+            accent={(summary?.savingsRate ?? 0) >= 20 ? "profit" : (summary?.savingsRate ?? 0) < 0 ? "loss" : "neutral"}
           />
           <KPICard
             title="Rentabilidad Cartera"

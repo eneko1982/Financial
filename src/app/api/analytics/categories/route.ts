@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCategoryColor } from "@/lib/category-classifier";
 import { startOfMonth, endOfMonth } from "date-fns";
+import { isInternalTransfer } from "@/lib/utils/calculations";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -22,7 +23,8 @@ export async function GET(req: NextRequest) {
   });
 
   const catMap: Record<string, number> = {};
-  for (const tx of txs) {
+  // Exclude internal transfers — they are not real income or expenses
+  for (const tx of txs.filter((t) => !isInternalTransfer(t.category, t.description))) {
     const cat = tx.category ?? (type === "income" ? "Sin categoría" : "Sin categoría");
     catMap[cat] = (catMap[cat] ?? 0) + Math.abs(tx.amount);
   }
