@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 96%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 142 76% 36%;
+    --primary-foreground: 144 100% 96%;
+    --secondary: 217 32% 17%;
+    --secondary-foreground: 210 40% 96%;
+    --muted: 217 32% 14%;
+    --muted-foreground: 215 20% 55%;
+    --accent: 217 91% 60%;
+    --accent-foreground: 210 40% 96%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 217 32% 17%;
+    --input: 217 32% 17%;
+    --ring: 142 76% 36%;
+    --profit: 142 76% 36%;
+    --profit-foreground: 144 100% 96%;
+    --loss: 0 84% 60%;
+    --loss-foreground: 0 0% 98%;
+    --radius: 0.625rem;
+  }
+
+  .light {
+    --background: 0 0% 97%;
+    --foreground: 222 47% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 10%;
+    --primary: 142 76% 30%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 210 40% 94%;
+    --secondary-foreground: 222 47% 10%;
+    --muted: 210 40% 93%;
+    --muted-foreground: 215 20% 45%;
+    --accent: 217 91% 55%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 210 30% 88%;
+    --input: 210 30% 88%;
+    --ring: 142 76% 30%;
+    --profit: 142 76% 30%;
+    --profit-foreground: 0 0% 98%;
+    --loss: 0 72% 51%;
+    --loss-foreground: 0 0% 98%;
+    --radius: 0.625rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-muted/30;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
+}
+
+/* Monospace tabular numbers for financial data */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

@@ -1,0 +1,167 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id             String           @id @default(cuid())
+  name           String
+  type           String           // "checking" | "savings" | "investment" | "credit"
+  bank           String
+  currency       String           @default("EUR")
+  color          String?
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  transactions   Transaction[]
+  balanceHistory AccountBalance[]
+}
+
+model AccountBalance {
+  id        String   @id @default(cuid())
+  accountId String
+  balance   Float
+  date      DateTime
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, date])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  accountId   String
+  date        DateTime
+  description String
+  amount      Float
+  balance     Float?
+  category    String?
+  subcategory String?
+  notes       String?
+  isTransfer  Boolean  @default(false)
+  importHash  String?  @unique
+  createdAt   DateTime @default(now())
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, date])
+  @@index([date])
+  @@index([category])
+}
+
+model Budget {
+  id        String   @id @default(cuid())
+  category  String
+  amount    Float
+  period    String   @default("monthly")
+  color     String?
+  icon      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([category, period])
+}
+
+model InvestmentAccount {
+  id           String                  @id @default(cuid())
+  name         String
+  broker       String
+  currency     String                  @default("EUR")
+  positions    InvestmentPosition[]
+  transactions InvestmentTransaction[]
+}
+
+model InvestmentPosition {
+  id           String            @id @default(cuid())
+  accountId    String
+  ticker       String
+  name         String
+  shares       Float
+  averageCost  Float
+  currentPrice Float?
+  currency     String            @default("EUR")
+  assetClass   String?
+  sector       String?
+  lastUpdated  DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  account      InvestmentAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([ticker])
+}
+
+model InvestmentTransaction {
+  id         String            @id @default(cuid())
+  accountId  String
+  date       DateTime
+  ticker     String
+  type       String            // "buy" | "sell" | "dividend" | "split"
+  shares     Float
+  price      Float
+  amount     Float
+  fees       Float             @default(0)
+  currency   String            @default("EUR")
+  importHash String?           @unique
+  createdAt  DateTime          @default(now())
+  account    InvestmentAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, date])
+  @@index([ticker])
+}
+
+model SavingsGoal {
+  id            String    @id @default(cuid())
+  name          String
+  targetAmount  Float
+  currentAmount Float     @default(0)
+  targetDate    DateTime?
+  category      String?
+  description   String?
+  color         String?
+  icon          String?
+  isCompleted   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model AIConversation {
+  id        String      @id @default(cuid())
+  title     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  messages  AIMessage[]
+}
+
+model AIMessage {
+  id             String         @id @default(cuid())
+  conversationId String
+  role           String         // "user" | "assistant"
+  content        String
+  createdAt      DateTime       @default(now())
+  conversation   AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model AIReport {
+  id        String   @id @default(cuid())
+  period    String
+  content   String
+  summary   String?
+  createdAt DateTime @default(now())
+
+  @@unique([period])
+}
+
+model NetWorthSnapshot {
+  id          String   @id @default(cuid())
+  date        DateTime
+  totalAssets Float
+  liabilities Float    @default(0)
+  netWorth    Float
+  breakdown   String
+  createdAt   DateTime @default(now())
+
+  @@index([date])
+}
