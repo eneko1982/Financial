@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     let headerIdx = 0;
     for (let i = 0; i < rawRows.length; i++) {
       const nonEmpty = rawRows[i].filter((c) => String(c ?? "").trim() !== "").length;
-      if (nonEmpty >= 3) { headerIdx = i; break; }
+      if (nonEmpty >= 4) { headerIdx = i; break; }
     }
 
     const csvHeaders = rawRows[headerIdx].map((h) => String(h ?? "").trim());
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     let headerIdx = 0;
     for (let i = 0; i < rawRows.length; i++) {
       const nonEmpty = (rawRows[i] as unknown[]).filter((c) => String(c ?? "").trim() !== "").length;
-      if (nonEmpty >= 3) { headerIdx = i; break; }
+      if (nonEmpty >= 4) { headerIdx = i; break; }
     }
 
     const headers = (rawRows[headerIdx] as unknown[]).map((h) => String(h ?? "").trim());

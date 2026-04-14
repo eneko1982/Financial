@@ -5,19 +5,23 @@ import { classifyTransaction } from "@/lib/category-classifier";
 import type { ParsedTransaction } from "@/types/financial";
 import type { ParserResult } from "./index";
 
-// ING: "Fecha","Nombre","Categoría","Subcategoría","Importe (€)","Saldo (€)"
+// ING Excel: "F. VALOR","CATEGORÍA","SUBCATEGORÍA","DESCRIPCIÓN","COMENTARIO","IMPORTE (€)","SALDO (€)"
+// ING CSV:   "Fecha","Nombre","Categoría","Subcategoría","Importe (€)","Saldo (€)"
 export function parseING(rows: Record<string, string>[]): ParserResult {
   const transactions: ParsedTransaction[] = [];
   const errors: string[] = [];
 
   for (const row of rows) {
     try {
-      const dateStr = row["Fecha"] ?? row["Fecha Valor"] ?? "";
-      const desc = row["Nombre"] ?? row["Concepto"] ?? row["Descripción"] ?? "";
-      const amtStr = row["Importe (€)"] ?? row["Importe"] ?? "";
-      const balStr = row["Saldo (€)"] ?? row["Saldo"] ?? "";
+      // Support both Excel (uppercase, "F. VALOR") and CSV ("Fecha") column names
+      const dateStr = row["F. VALOR"] ?? row["F.VALOR"] ?? row["Fecha"] ?? row["Fecha Valor"] ?? "";
+      const desc =
+        row["DESCRIPCIÓN"] ?? row["Descripción"] ?? row["Nombre"] ?? row["Concepto"] ?? "";
+      const amtStr = row["IMPORTE (€)"] ?? row["Importe (€)"] ?? row["Importe"] ?? "";
+      const balStr = row["SALDO (€)"] ?? row["Saldo (€)"] ?? row["Saldo"] ?? "";
       // ING provides its own category — use it if available
-      const ingCategory = row["Categoría"] ?? row["Categoria"] ?? "";
+      const ingCategory =
+        row["CATEGORÍA"] ?? row["Categoría"] ?? row["Categoria"] ?? "";
 
       const date = parseSpanishDate(dateStr);
       if (!date || !desc || !amtStr) continue;
