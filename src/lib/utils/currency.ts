@@ -35,9 +35,15 @@ export function formatChange(value: number): { text: string; positive: boolean }
   };
 }
 
-/** Parse Spanish number format "1.234,56" → 1234.56 */
+/** Parse number string from either Spanish format "1.234,56" or plain JS "1234.56" */
 export function parseSpanishNumber(str: string): number {
   if (!str) return 0;
-  const cleaned = str.replace(/\./g, "").replace(",", ".").replace(/[^0-9.-]/g, "");
-  return parseFloat(cleaned) || 0;
+  const s = str.trim();
+  // If the string has a comma, it's Spanish format: "1.234,56" or "-53,90"
+  if (s.includes(",")) {
+    const cleaned = s.replace(/\./g, "").replace(",", ".").replace(/[^0-9.-]/g, "");
+    return parseFloat(cleaned) || 0;
+  }
+  // Otherwise treat as plain number (JS-formatted): "7020.15", "-53.9", "-100"
+  return parseFloat(s.replace(/[^0-9.-]/g, "")) || 0;
 }

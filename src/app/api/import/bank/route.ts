@@ -44,24 +44,38 @@ export async function POST(req: NextRequest) {
     const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
     const ws = wb.Sheets[wb.SheetNames[0]];
 
-    // Read as raw array-of-arrays to handle Excel files with metadata rows
-    // (e.g. BBVA exports have 3 rows of "Últimos movimientos / Fecha generación" before the real headers)
-    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: false, defval: "" }) as string[][];
+    // Use raw: true + cellDates: true so numbers come as JS numbers (not locale-formatted strings)
+    // This avoids parseSpanishNumber misinterpreting "-53.90" (dot decimal) as "-5390"
+    // cellDates is set at read() time, so sheet_to_json just needs raw: true
+    const rawRows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: "" }) as unknown[][];
 
     // Find the actual header row: first row with at least 3 non-empty cells
+    // (skips metadata rows like "Últimos movimientos" or the IBAN title in CaixaBank)
     let headerIdx = 0;
     for (let i = 0; i < rawRows.length; i++) {
-      const nonEmpty = rawRows[i].filter((c) => String(c ?? "").trim() !== "").length;
+      const nonEmpty = (rawRows[i] as unknown[]).filter((c) => String(c ?? "").trim() !== "").length;
       if (nonEmpty >= 3) { headerIdx = i; break; }
     }
 
-    const headers = rawRows[headerIdx].map((h) => String(h ?? "").trim());
-    rows = rawRows
-      .slice(headerIdx + 1)
+    const headers = (rawRows[headerIdx] as unknown[]).map((h) => String(h ?? "").trim());
+    rows = (rawRows.slice(headerIdx + 1) as unknown[][])
       .filter((row) => row.some((c) => String(c ?? "").trim() !== ""))
       .map((row) => {
         const obj: Record<string, string> = {};
-        headers.forEach((h, i) => { if (h) obj[h] = String(row[i] ?? "").trim(); });
+        headers.forEach((h, i) => {
+          if (!h) return;
+          const val = row[i];
+          if (val instanceof Date) {
+            // Format date as DD/MM/YYYY for parseSpanishDate
+            const d = val;
+            obj[h] = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+          } else if (typeof val === "number") {
+            // Raw JS number — convert directly, no Spanish formatting needed
+            obj[h] = String(val);
+          } else {
+            obj[h] = String(val ?? "").trim();
+          }
+        });
         return obj;
       });
   }

@@ -10,13 +10,20 @@ export async function GET() {
   const prevStart = startOfMonth(subMonths(now, 1));
   const prevEnd = endOfMonth(subMonths(now, 1));
 
-  // Bank balances
+  // Bank balances — same priority as accounts page:
+  // 1) manual AccountBalance snapshot, 2) last tx balance field (Disponible), 3) sum of amounts
   const accounts = await prisma.account.findMany({ where: { isActive: true } });
   let totalBank = 0;
   for (const acc of accounts) {
-    const last = await prisma.accountBalance.findFirst({ where: { accountId: acc.id }, orderBy: { date: "desc" } });
+    const snapshot = await prisma.accountBalance.findFirst({ where: { accountId: acc.id }, orderBy: { date: "desc" } });
+    if (snapshot) { totalBank += snapshot.balance; continue; }
+    const lastTxWithBalance = await prisma.transaction.findFirst({
+      where: { accountId: acc.id, balance: { not: null } },
+      orderBy: { date: "desc" },
+    });
+    if (lastTxWithBalance?.balance != null) { totalBank += lastTxWithBalance.balance; continue; }
     const txSum = await prisma.transaction.aggregate({ where: { accountId: acc.id }, _sum: { amount: true } });
-    totalBank += last?.balance ?? txSum._sum.amount ?? 0;
+    totalBank += txSum._sum.amount ?? 0;
   }
 
   // Portfolio
