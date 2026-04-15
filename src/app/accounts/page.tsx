@@ -1,11 +1,12 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Filter, MoreVertical, Pencil, Trash2, Download, Tag } from "lucide-react";
+import { Plus, Search, Filter, MoreVertical, Pencil, Trash2, Download, Tag, PenLine } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useUserCategories } from "@/hooks/useUserCategories";
 import { useQueryClient } from "@tanstack/react-query";
+import { useUIStore } from "@/store/uiStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -44,6 +45,7 @@ export default function AccountsPage() {
   const [editAccount, setEditAccount] = useState<{ id: string; name: string; bank: string; type: string } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const deleteAccount = useDeleteAccount();
+  const { setEditTx } = useUIStore();
 
   const { data: txData, isLoading: txLoading } = useTransactions({
     accountId: selectedAccount || undefined,
@@ -379,13 +381,32 @@ export default function AccountsPage() {
                             {tx.amount >= 0 ? "+" : ""}{formatCurrency(tx.amount)}
                           </td>
                           <td className="px-2 py-3">
-                            <button
-                              onClick={() => setDeleteTxId(tx.id)}
-                              className="opacity-0 group-hover:opacity-100 rounded p-1 text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-all"
-                              title="Eliminar movimiento"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
+                              <button
+                                onClick={() => setEditTx({
+                                  id: tx.id,
+                                  amount: tx.amount,
+                                  description: tx.description,
+                                  date: tx.date,
+                                  accountId: tx.accountId,
+                                  category: tx.category ?? null,
+                                  subcategory: tx.subcategory ?? null,
+                                  notes: tx.notes ?? null,
+                                  isTransfer: tx.isTransfer ?? false,
+                                })}
+                                className="rounded p-1 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
+                                title="Editar movimiento"
+                              >
+                                <PenLine className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setDeleteTxId(tx.id)}
+                                className="rounded p-1 text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-all"
+                                title="Eliminar movimiento"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );

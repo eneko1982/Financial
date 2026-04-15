@@ -5,7 +5,14 @@ import { AddTransactionSheet } from "./AddTransactionSheet";
 import { useUIStore } from "@/store/uiStore";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { addTxOpen, setAddTxOpen } = useUIStore();
+  const { addTxOpen, setAddTxOpen, editTx, setEditTx } = useUIStore();
+
+  const sheetOpen = addTxOpen || !!editTx;
+
+  function handleClose() {
+    setAddTxOpen(false);
+    setEditTx(null);
+  }
 
   return (
     <div className="flex min-h-screen">
@@ -14,7 +21,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <BottomNav onAdd={() => setAddTxOpen(true)} />
-      <AddTransactionSheet open={addTxOpen} onClose={() => setAddTxOpen(false)} />
+      <AddTransactionSheet open={sheetOpen} onClose={handleClose} editTx={editTx} />
     </div>
   );
 }
