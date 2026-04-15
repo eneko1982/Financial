@@ -33,7 +33,6 @@ export default function ExpensesPage() {
   const [txSubcategory, setTxSubcategory] = useState("");
   const [txPage, setTxPage] = useState(1);
   const [budgetOpen, setBudgetOpen] = useState(false);
-  const { setImportOpen } = useUIStore();
 
   const { data: accounts = [] } = useAccounts();
   const { data: userCategories = [] } = useUserCategories();
@@ -82,7 +81,7 @@ export default function ExpensesPage() {
 
   return (
     <div>
-      <Header title="Gastos & Ingresos" onImport={() => setImportOpen(true)} />
+      <Header title="Gastos & Ingresos" />
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
 
         {/* Controls row */}

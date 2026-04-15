@@ -1,14 +1,13 @@
 "use client";
 import { useTheme } from "next-themes";
-import { Sun, Moon, Upload } from "lucide-react";
+import { Sun, Moon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface HeaderProps {
   title: string;
-  onImport?: () => void;
 }
 
-export function Header({ title, onImport }: HeaderProps) {
+export function Header({ title }: HeaderProps) {
   const { theme, setTheme } = useTheme();
 
   return (
@@ -23,12 +22,6 @@ export function Header({ title, onImport }: HeaderProps) {
         >
           {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
-        {onImport && (
-          <Button size="sm" className="gap-2" onClick={onImport}>
-            <Upload className="h-4 w-4" />
-            <span className="hidden sm:inline">Importar</span>
-          </Button>
-        )}
       </div>
     </header>
   );

@@ -1,12 +1,11 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Filter, MoreVertical, Pencil, Trash2, Download, Tag, History } from "lucide-react";
+import { Plus, Search, Filter, MoreVertical, Pencil, Trash2, Download, Tag } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useUserCategories } from "@/hooks/useUserCategories";
 import { useQueryClient } from "@tanstack/react-query";
-import { useUIStore } from "@/store/uiStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -19,7 +18,7 @@ import { CategoryEditor } from "@/components/transactions/CategoryEditor";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const BANK_COLORS: Record<string, string> = {
-  BBVA: "#00A1E0", Santander: "#EC0000", CaixaBank: "#007AFF", ING: "#FF6200",
+  BBVA: "#00A1E0", Santander: "#EC0000", CaixaBank: "#F5A623", ING: "#FF6200",
   Sabadell: "#007DC5", Bankinter: "#FF6B35", Otro: "#6366f1",
 };
 
@@ -31,9 +30,7 @@ export default function AccountsPage() {
   const [category, setCategory] = useState("");
   const [subcategory, setSubcategory] = useState("");
   const [page, setPage] = useState(1);
-  const [onlyUnedited, setOnlyUnedited] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [importHistoryOpen, setImportHistoryOpen] = useState(false);
   const [deleteTxId, setDeleteTxId] = useState<string | null>(null);
   const [deleteTxPending, setDeleteTxPending] = useState(false);
 
@@ -47,14 +44,12 @@ export default function AccountsPage() {
   const [editAccount, setEditAccount] = useState<{ id: string; name: string; bank: string; type: string } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const deleteAccount = useDeleteAccount();
-  const { setImportOpen } = useUIStore();
 
   const { data: txData, isLoading: txLoading } = useTransactions({
     accountId: selectedAccount || undefined,
     search: search || undefined,
     category: category || undefined,
     subcategory: subcategory || undefined,
-    editedByUser: onlyUnedited ? false : undefined,
     page,
     limit: 30,
   });
@@ -78,7 +73,7 @@ export default function AccountsPage() {
   useEffect(() => {
     setSelectedIds(new Set());
     setSelectAllFiltered(false);
-  }, [selectedAccount, search, category, subcategory, onlyUnedited, page]);
+  }, [selectedAccount, search, category, subcategory, page]);
 
   function toggleRow(id: string) {
     setSelectAllFiltered(false);
@@ -137,7 +132,6 @@ export default function AccountsPage() {
               search: search || undefined,
               category: category || undefined,
               subcategory: subcategory || undefined,
-              editedByUser: onlyUnedited ? false : undefined,
             },
             category: bulkCategory,
             subcategory: bulkSubcategory || null,
@@ -163,7 +157,7 @@ export default function AccountsPage() {
 
   return (
     <div>
-      <Header title="Cuentas Bancarias" onImport={() => setImportOpen(true)} />
+      <Header title="Cuentas Bancarias" />
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
 
         {/* Account cards */}
@@ -254,25 +248,7 @@ export default function AccountsPage() {
               </SelectContent>
             </Select>
           )}
-          <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-muted-foreground hover:text-foreground transition-colors">
-            <input
-              type="checkbox"
-              checked={onlyUnedited}
-              onChange={(e) => { setOnlyUnedited(e.target.checked); setPage(1); }}
-              className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
-            />
-            Solo sin editar
-          </label>
           <div className="ml-auto flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={() => setImportHistoryOpen(true)}
-            >
-              <History className="h-3.5 w-3.5" />
-              Historial importaciones
-            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -318,7 +294,7 @@ export default function AccountsPage() {
         )}
 
         {/* Filter summary */}
-        {!txLoading && (search || category || subcategory || selectedAccount || onlyUnedited) && (
+        {!txLoading && (search || category || subcategory || selectedAccount) && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>{txData?.meta?.total ?? 0} resultados</span>
             <span className="text-border">·</span>
@@ -532,15 +508,6 @@ export default function AccountsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Import history dialog */}
-      <ImportHistoryDialog
-        open={importHistoryOpen}
-        onClose={() => setImportHistoryOpen(false)}
-        onDeleted={() => {
-          qc.invalidateQueries({ queryKey: ["transactions"] });
-          qc.invalidateQueries({ queryKey: ["analytics"] });
-        }}
-      />
     </div>
   );
 }
@@ -654,123 +621,3 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose: () => voi
   );
 }
 
-interface ImportBatch {
-  createdAt: string;
-  accountId: string;
-  accountName: string;
-  accountBank: string;
-  count: number;
-  dateFrom: string | null;
-  dateTo: string | null;
-}
-
-function ImportHistoryDialog({ open, onClose, onDeleted }: { open: boolean; onClose: () => void; onDeleted: () => void }) {
-  const [batches, setBatches] = useState<ImportBatch[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [confirmBatch, setConfirmBatch] = useState<ImportBatch | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setLoading(true);
-    fetch("/api/import/bank/batches")
-      .then((r) => r.json())
-      .then((json) => setBatches(json.data ?? []))
-      .finally(() => setLoading(false));
-  }, [open]);
-
-  async function deleteBatch(batch: ImportBatch) {
-    setDeleting(batch.createdAt);
-    try {
-      await fetch("/api/import/bank/batches", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ createdAt: batch.createdAt, accountId: batch.accountId }),
-      });
-      onDeleted();
-      setBatches((prev) => prev.filter((b) => b.createdAt !== batch.createdAt || b.accountId !== batch.accountId));
-    } finally {
-      setDeleting(null);
-      setConfirmBatch(null);
-    }
-  }
-
-  return (
-    <>
-      <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <History className="h-4 w-4" />
-              Historial de importaciones
-            </DialogTitle>
-          </DialogHeader>
-          {loading ? (
-            <div className="space-y-2 py-2">
-              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
-            </div>
-          ) : batches.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-6 text-center">No hay importaciones registradas.</p>
-          ) : (
-            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
-              {batches.map((b, i) => (
-                <div key={`${b.createdAt}-${b.accountId}`} className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      {i === 0 && <Badge variant="secondary" className="text-[10px] shrink-0">Última</Badge>}
-                      <span className="text-sm font-medium truncate">{b.accountName}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">{b.accountBank}</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3">
-                      <span>{b.count} movimientos</span>
-                      {b.dateFrom && b.dateTo && (
-                        <span>
-                          {new Date(b.dateFrom).toLocaleDateString("es-ES")}
-                          {b.dateFrom !== b.dateTo && ` – ${new Date(b.dateTo).toLocaleDateString("es-ES")}`}
-                        </span>
-                      )}
-                      <span>Importado el {new Date(b.createdAt).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" })}</span>
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 text-red-400 border-red-400/30 hover:bg-red-400/10 hover:text-red-400"
-                    onClick={() => setConfirmBatch(b)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                    Eliminar
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="ghost" onClick={onClose}>Cerrar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Confirm batch delete */}
-      <Dialog open={!!confirmBatch} onOpenChange={(o) => !o && setConfirmBatch(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>¿Eliminar importación?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Se eliminarán permanentemente <strong className="text-foreground">{confirmBatch?.count} movimientos</strong> de{" "}
-            <strong className="text-foreground">{confirmBatch?.accountName}</strong>. Esta acción no se puede deshacer.
-          </p>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setConfirmBatch(null)}>Cancelar</Button>
-            <Button
-              variant="destructive"
-              disabled={!!deleting}
-              onClick={() => confirmBatch && deleteBatch(confirmBatch)}
-            >
-              {deleting ? "Eliminando..." : "Eliminar movimientos"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}

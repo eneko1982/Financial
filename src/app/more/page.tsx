@@ -1,7 +1,6 @@
 "use client";
 import Link from "next/link";
-import { Tag, TrendingUp, Target, Landmark, Bot, Upload, ChevronRight } from "lucide-react";
-import { useUIStore } from "@/store/uiStore";
+import { Tag, TrendingUp, Target, Landmark, Bot, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const TILES = [
@@ -49,8 +48,6 @@ const TILES = [
 ];
 
 export default function MorePage() {
-  const { setImportOpen } = useUIStore();
-
   return (
     <div className="max-w-2xl mx-auto">
       {/* Header */}
@@ -82,20 +79,6 @@ export default function MorePage() {
           </Link>
         ))}
 
-        {/* Import tile (button, not link) */}
-        <button
-          onClick={() => setImportOpen(true)}
-          className="w-full flex items-center gap-4 rounded-xl border border-border bg-card p-4 hover:bg-muted/50 transition-colors active:scale-[0.98] text-left"
-        >
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-400/10 shrink-0">
-            <Upload className="h-5 w-5 text-amber-400" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <span className="font-semibold text-sm">Importar datos</span>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-tight">Importa extractos bancarios en formato CSV u OFX</p>
-          </div>
-          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-        </button>
       </div>
     </div>
   );

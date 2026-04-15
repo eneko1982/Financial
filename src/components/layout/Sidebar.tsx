@@ -3,10 +3,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, CreditCard, PieChart, TrendingUp,
-  Target, Bot, Upload, Tag, Landmark,
+  Target, Bot, Tag, Landmark,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
-import { Button } from "@/components/ui/button";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -19,11 +18,7 @@ const NAV_ITEMS = [
   { href: "/advisor", label: "Asesor IA", icon: Bot },
 ];
 
-interface SidebarProps {
-  onImport?: () => void;
-}
-
-export function Sidebar({ onImport }: SidebarProps) {
+export function Sidebar() {
   const pathname = usePathname();
 
   return (
@@ -62,13 +57,6 @@ export function Sidebar({ onImport }: SidebarProps) {
           })}
         </nav>
 
-        {/* Import button */}
-        <div className="border-t border-border p-3">
-          <Button variant="outline" className="w-full gap-2" size="sm" onClick={onImport}>
-            <Upload className="h-4 w-4" />
-            Importar datos
-          </Button>
-        </div>
       </div>
     </aside>
   );

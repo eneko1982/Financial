@@ -3,7 +3,6 @@ import { useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Header } from "@/components/layout/Header";
 import { useInvestmentPositions } from "@/hooks/useAnalytics";
-import { useUIStore } from "@/store/uiStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -36,7 +35,6 @@ export default function InvestmentsPage() {
   const [posSearch, setPosSearch] = useState("");
   const [sortKey, setSortKey] = useState<"ticker" | "currentValue" | "pnlPct" | "weight">("currentValue");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const { setImportOpen } = useUIStore();
   const qc = useQueryClient();
 
   async function handleDelete(id: string) {
@@ -77,7 +75,7 @@ export default function InvestmentsPage() {
 
   return (
     <div>
-      <Header title="Cartera de Inversiones" onImport={() => setImportOpen(true)} />
+      <Header title="Cartera de Inversiones" />
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
 
         {/* Summary KPIs */}
