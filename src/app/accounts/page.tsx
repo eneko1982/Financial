@@ -582,6 +582,7 @@ function EditAccountDialog({ account, onClose }: { account: { id: string; name: 
                   <SelectItem value="checking">Corriente</SelectItem>
                   <SelectItem value="savings">Ahorro</SelectItem>
                   <SelectItem value="credit">Crédito</SelectItem>
+                  <SelectItem value="epsv">EPSV</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -634,6 +635,7 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose: () => voi
                   <SelectItem value="checking">Corriente</SelectItem>
                   <SelectItem value="savings">Ahorro</SelectItem>
                   <SelectItem value="credit">Crédito</SelectItem>
+                  <SelectItem value="epsv">EPSV</SelectItem>
                 </SelectContent>
               </Select>
             </div>

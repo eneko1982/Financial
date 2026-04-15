@@ -1,5 +1,5 @@
 "use client";
 import { AppShell } from "@/components/layout/AppShell";
-export default function CategoriesLayout({ children }: { children: React.ReactNode }) {
+export default function MoreLayout({ children }: { children: React.ReactNode }) {
   return <AppShell>{children}</AppShell>;
 }

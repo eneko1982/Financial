@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { invalidateFinancialContext } from "@/lib/financial-context";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -63,5 +64,29 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const tx = await prisma.transaction.create({ data: body });
+  await refreshBalance(tx.accountId, tx.amount);
+  invalidateFinancialContext();
   return NextResponse.json({ data: tx, error: null }, { status: 201 });
+}
+
+async function refreshBalance(accountId: string, delta: number) {
+  const [snap, lastTx] = await Promise.all([
+    prisma.accountBalance.findFirst({ where: { accountId }, orderBy: { date: "desc" }, select: { balance: true, date: true } }),
+    prisma.transaction.findFirst({ where: { accountId, balance: { not: null } }, orderBy: { date: "desc" }, select: { balance: true, date: true } }),
+  ]);
+
+  let current = 0;
+  if (snap && lastTx) {
+    current = lastTx.date >= snap.date ? (lastTx.balance as number) : snap.balance;
+  } else if (lastTx) {
+    current = lastTx.balance as number;
+  } else if (snap) {
+    current = snap.balance;
+  } else {
+    const agg = await prisma.transaction.aggregate({ where: { accountId }, _sum: { amount: true } });
+    current = (agg._sum.amount ?? 0) - delta;
+  }
+
+  await prisma.accountBalance.deleteMany({ where: { accountId } });
+  await prisma.accountBalance.create({ data: { accountId, balance: current + delta, date: new Date() } });
 }
