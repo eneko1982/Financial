@@ -2,9 +2,10 @@
 import { useState } from "react";
 import {
   ChevronLeft, ChevronRight, Wallet, TrendingUp, TrendingDown,
-  Plus, MoreVertical, Pencil, Trash2, ArrowLeftRight,
+  Plus, MoreVertical, Pencil, Trash2, ArrowLeftRight, Landmark,
 } from "lucide-react";
 import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
+import { useLiabilities } from "@/hooks/useLiabilities";
 import { useSummary } from "@/hooks/useAnalytics";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useUIStore, type EditTxData } from "@/store/uiStore";
@@ -42,6 +43,7 @@ function addMonth(ym: string, delta: number) {
 export default function InicioPage() {
   const { selectedMonth, setSelectedMonth, setEditTx } = useUIStore();
   const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
+  const { data: liabilityData = [] } = useLiabilities();
   const { data: summary } = useSummary();
   const { data: txData } = useTransactions({ limit: 8 });
 
@@ -51,6 +53,8 @@ export default function InicioPage() {
   const deleteAccount = useDeleteAccount();
 
   const totalAssets = accounts.filter(a => a.includeInNetWorth !== false).reduce((s, a) => s + a.balance, 0);
+  const totalLiabilities = liabilityData.reduce((s, l) => s + l.balance, 0);
+  const netWorth = totalAssets - totalLiabilities;
   const recentTxs = txData?.data ?? [];
 
   return (
@@ -72,13 +76,22 @@ export default function InicioPage() {
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-white/10 backdrop-blur p-3 space-y-1">
             <div className="flex items-center gap-1.5">
               <Wallet className="h-3.5 w-3.5 text-white/60" />
               <span className="text-[10px] text-white/60 font-medium uppercase tracking-wider">Patrimonio</span>
             </div>
-            <p className="text-base font-bold text-white leading-tight">{formatCurrency(totalAssets)}</p>
+            <p className="text-base font-bold text-white leading-tight">{formatCurrency(netWorth)}</p>
+          </div>
+          <div className={cn("rounded-xl backdrop-blur p-3 space-y-1", totalLiabilities > 0 ? "bg-red-500/15" : "bg-white/5")}>
+            <div className="flex items-center gap-1.5">
+              <Landmark className="h-3.5 w-3.5 text-red-400/80" />
+              <span className="text-[10px] text-red-300/80 font-medium uppercase tracking-wider">Pasivos</span>
+            </div>
+            <p className={cn("text-base font-bold leading-tight", totalLiabilities > 0 ? "text-red-300" : "text-white/50")}>
+              {totalLiabilities > 0 ? `-${formatCurrency(totalLiabilities)}` : formatCurrency(0)}
+            </p>
           </div>
           <div className="rounded-xl bg-emerald-500/15 backdrop-blur p-3 space-y-1">
             <div className="flex items-center gap-1.5">
@@ -87,12 +100,12 @@ export default function InicioPage() {
             </div>
             <p className="text-base font-bold text-emerald-300 leading-tight">{formatCurrency(summary?.monthlyIncome ?? 0)}</p>
           </div>
-          <div className="rounded-xl bg-red-500/15 backdrop-blur p-3 space-y-1">
+          <div className="rounded-xl bg-orange-500/15 backdrop-blur p-3 space-y-1">
             <div className="flex items-center gap-1.5">
-              <TrendingDown className="h-3.5 w-3.5 text-red-400" />
-              <span className="text-[10px] text-red-300/80 font-medium uppercase tracking-wider">Gastos</span>
+              <TrendingDown className="h-3.5 w-3.5 text-orange-400" />
+              <span className="text-[10px] text-orange-300/80 font-medium uppercase tracking-wider">Gastos</span>
             </div>
-            <p className="text-base font-bold text-red-300 leading-tight">{formatCurrency(Math.abs(summary?.monthlyExpenses ?? 0))}</p>
+            <p className="text-base font-bold text-orange-300 leading-tight">{formatCurrency(Math.abs(summary?.monthlyExpenses ?? 0))}</p>
           </div>
         </div>
       </div>
