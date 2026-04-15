@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { format, startOfMonth, endOfMonth, subMonths, subDays } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { es } from "date-fns/locale";
 import type { FinancialContext } from "@/types/financial";
 import { calcSavingsRate, calcTotalReturn, calcGoalProgress, isInternalTransfer } from "./utils/calculations";
@@ -143,13 +143,15 @@ export async function buildFinancialContext(): Promise<FinancialContext> {
     })
   );
 
-  // ── Full transaction history (last 90 days, excluding internal transfers) ──
-  // Provides the AI advisor with real movement data, not just aggregated summaries.
-  const ninetyDaysAgo = subDays(now, 90);
+  // ── Full transaction history (from 1 Jan 2026, excluding internal transfers) ─
+  // Fixed start date so the AI always sees the complete year regardless of when
+  // it is queried. No hard cap on count — take up to 2000 to cover a full year
+  // across all accounts.
+  const historyStart = new Date("2026-01-01T00:00:00.000Z");
   const rawRecentTxs = await prisma.transaction.findMany({
-    where: { date: { gte: ninetyDaysAgo } },
+    where: { date: { gte: historyStart } },
     orderBy: { date: "desc" },
-    take: 300,
+    take: 2000,
     include: { account: { select: { name: true, bank: true } } },
   });
   const recentTransactions = rawRecentTxs
