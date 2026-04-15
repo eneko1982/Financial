@@ -21,6 +21,9 @@ import { MoreVertical } from "lucide-react";
 const ASSET_COLORS: Record<string, string> = {
   stocks: "#22c55e", etf: "#3b82f6", bonds: "#f59e0b", crypto: "#a855f7", cash: "#06b6d4", other: "#6b7280",
 };
+const ASSET_LABELS: Record<string, string> = {
+  stocks: "Acciones", etf: "ETF", bonds: "Bonos", crypto: "Cripto", cash: "Efectivo", other: "Otro",
+};
 
 export default function InvestmentsPage() {
   const { data: posData, isLoading: posLoading } = useInvestmentPositions();
@@ -33,6 +36,7 @@ export default function InvestmentsPage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [editPos, setEditPos] = useState<(typeof positions)[0] | null>(null);
   const [posSearch, setPosSearch] = useState("");
+  const [classFilter, setClassFilter] = useState("all");
   const [sortKey, setSortKey] = useState<"ticker" | "currentValue" | "pnlPct" | "weight">("currentValue");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const qc = useQueryClient();
@@ -42,8 +46,8 @@ export default function InvestmentsPage() {
     qc.invalidateQueries({ queryKey: ["investments"] });
   }
 
-  // Filtered and sorted positions for the table
   const filteredPositions = positions
+    .filter(p => classFilter === "all" || (p.assetClass ?? "other") === classFilter)
     .filter(p => !posSearch || p.ticker.toUpperCase().includes(posSearch.toUpperCase()) || p.name.toLowerCase().includes(posSearch.toLowerCase()))
     .sort((a, b) => {
       const mult = sortDir === "asc" ? 1 : -1;
@@ -64,7 +68,6 @@ export default function InvestmentsPage() {
     return sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />;
   }
 
-  // Allocation by asset class
   const allocationData = Object.entries(
     positions.reduce((acc, p) => {
       const cls = p.assetClass ?? "other";
@@ -73,97 +76,252 @@ export default function InvestmentsPage() {
     }, {} as Record<string, number>)
   ).map(([name, value]) => ({ name, value }));
 
-  return (
-    <div>
-      <Header title="Cartera de Inversiones" />
-      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+  const assetClasses = ["all", ...Array.from(new Set(positions.map(p => p.assetClass ?? "other")))];
 
-        {/* Summary KPIs */}
-        {posLoading ? (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+  return (
+    <div className="max-w-2xl mx-auto lg:max-w-7xl">
+
+      {/* ── Gradient header ── */}
+      <div className="bg-gradient-to-br from-slate-900 via-emerald-500/15 to-slate-900 px-5 pt-12 pb-6 space-y-4">
+
+        {/* Title + action buttons */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-foreground">Cartera</h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setBulkOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/90 hover:bg-white/20 transition-colors"
+            >
+              <ClipboardPaste className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Broker</span>
+            </button>
+            <button
+              onClick={() => setAddOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Añadir</span>
+            </button>
           </div>
-        ) : null}
-        <div className={posLoading ? "hidden" : "grid grid-cols-2 lg:grid-cols-4 gap-4"}>
-          <Card><CardContent className="p-5">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Valor Total</p>
-            <p className="text-2xl font-bold mt-1 tabular-nums">{formatCurrency(totalValue)}</p>
-          </CardContent></Card>
-          <Card><CardContent className="p-5">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Coste Total</p>
-            <p className="text-2xl font-bold mt-1 tabular-nums">{formatCurrency(totalCost)}</p>
-          </CardContent></Card>
-          <Card><CardContent className="p-5">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">P&L Total</p>
-            <p className={cn("text-2xl font-bold mt-1 tabular-nums", totalPnl >= 0 ? "text-emerald-400" : "text-red-400")}>
-              {totalPnl >= 0 ? "+" : ""}{formatCurrency(totalPnl)}
-            </p>
-          </CardContent></Card>
-          <Card><CardContent className="p-5">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Rentabilidad</p>
-            <p className={cn("text-2xl font-bold mt-1 tabular-nums", totalPnlPct >= 0 ? "text-emerald-400" : "text-red-400")}>
-              {totalPnlPct >= 0 ? "+" : ""}{totalPnlPct.toFixed(2)}%
-            </p>
-          </CardContent></Card>
         </div>
 
-        {/* Charts */}
-        <div className="grid lg:grid-cols-2 gap-4">
+        {/* Hero value */}
+        {posLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-9 w-48 bg-white/10" />
+            <Skeleton className="h-5 w-32 bg-white/10" />
+          </div>
+        ) : (
+          <div>
+            <p className="text-[11px] text-white/50 uppercase tracking-widest font-medium mb-0.5">Valor total</p>
+            <p className="text-3xl font-bold text-white tabular-nums leading-tight">{formatCurrency(totalValue)}</p>
+            <div className="flex items-center gap-2 mt-1.5">
+              {totalPnl >= 0
+                ? <TrendingUp className="h-4 w-4 text-emerald-400" />
+                : <TrendingDown className="h-4 w-4 text-red-400" />}
+              <span className={cn("text-sm font-semibold tabular-nums", totalPnl >= 0 ? "text-emerald-400" : "text-red-400")}>
+                {totalPnl >= 0 ? "+" : ""}{formatCurrency(totalPnl)}
+              </span>
+              <span className={cn("text-sm font-semibold tabular-nums", totalPnlPct >= 0 ? "text-emerald-400" : "text-red-400")}>
+                ({totalPnlPct >= 0 ? "+" : ""}{totalPnlPct.toFixed(2)}%)
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Mini stats grid */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-xl bg-white/8 backdrop-blur p-3 space-y-0.5">
+            <p className="text-[10px] text-white/50 uppercase tracking-wider font-medium">Coste total</p>
+            <p className="text-base font-bold text-white tabular-nums leading-tight">
+              {posLoading ? "—" : formatCurrency(totalCost)}
+            </p>
+          </div>
+          <div className="rounded-xl bg-white/8 backdrop-blur p-3 space-y-0.5">
+            <p className="text-[10px] text-white/50 uppercase tracking-wider font-medium">Posiciones</p>
+            <p className="text-base font-bold text-white leading-tight">
+              {posLoading ? "—" : positions.length}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4 py-4 space-y-5">
+
+        {/* ── Allocation charts ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Asignación por Clase de Activo</CardTitle></CardHeader>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Asignación por clase</CardTitle>
+            </CardHeader>
             <CardContent>
               {allocationData.length === 0 ? (
-                <p className="text-center text-sm text-muted-foreground py-8">Sin posiciones</p>
+                <p className="text-center text-sm text-muted-foreground py-6">Sin posiciones</p>
               ) : (
-                <ResponsiveContainer width="100%" height={220}>
+                <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
-                    <Pie data={allocationData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90}>
+                    <Pie data={allocationData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={30}>
                       {allocationData.map((e, i) => <Cell key={i} fill={ASSET_COLORS[e.name] ?? "#6b7280"} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [formatCurrency(v)]} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 11 }} formatter={(v: number) => [formatCurrency(v)]} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => ASSET_LABELS[v] ?? v} />
                   </PieChart>
                 </ResponsiveContainer>
               )}
             </CardContent>
           </Card>
 
-          {/* Position weights */}
           <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Peso de Posiciones</CardTitle></CardHeader>
-            <CardContent className="space-y-2">
-              {positions.slice(0, 7).map((p) => (
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Peso de posiciones</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2.5">
+              {positions.slice(0, 6).map((p) => (
                 <div key={p.id} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{p.ticker}</span>
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full" style={{ background: ASSET_COLORS[p.assetClass ?? "other"] }} />
+                      <span className="font-mono font-semibold">{p.ticker}</span>
+                    </div>
                     <span className="text-muted-foreground tabular-nums">{p.weight.toFixed(1)}%</span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary/70" style={{ width: `${p.weight}%` }} />
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${p.weight}%`, background: ASSET_COLORS[p.assetClass ?? "other"] }} />
                   </div>
                 </div>
               ))}
-              {positions.length === 0 && <p className="text-sm text-muted-foreground text-center py-6">Sin posiciones. Añade tu primera posición.</p>}
+              {positions.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">Sin posiciones</p>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Positions table */}
+        {/* ── Positions section ── */}
         <div>
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Posiciones</h2>
-            <div className="flex items-center gap-2">
-              <Input
-                placeholder="Buscar ticker o nombre..."
-                value={posSearch}
-                onChange={e => setPosSearch(e.target.value)}
-                className="h-8 w-52 text-xs"
-              />
-              <Button size="sm" variant="outline" className="gap-2" onClick={() => setBulkOpen(true)}><ClipboardPaste className="h-3.5 w-3.5" />Pegar desde broker</Button>
-              <Button size="sm" className="gap-2" onClick={() => setAddOpen(true)}><Plus className="h-3.5 w-3.5" />Añadir posición</Button>
-            </div>
+          {/* Section header */}
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-foreground">Posiciones</h2>
+            {/* Desktop search */}
+            <Input
+              placeholder="Buscar ticker o nombre..."
+              value={posSearch}
+              onChange={e => setPosSearch(e.target.value)}
+              className="hidden lg:flex h-8 w-52 text-xs"
+            />
           </div>
-          <div className="rounded-xl border border-border overflow-hidden">
+
+          {/* Asset class filter pills — mobile only */}
+          {assetClasses.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-2 lg:hidden -mx-4 px-4 scrollbar-none mb-3">
+              {assetClasses.map(cls => (
+                <button
+                  key={cls}
+                  onClick={() => setClassFilter(cls)}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium whitespace-nowrap transition-all shrink-0",
+                    classFilter === cls
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {cls !== "all" && (
+                    <span className="h-2 w-2 rounded-full" style={{ background: ASSET_COLORS[cls] ?? "#6b7280" }} />
+                  )}
+                  {cls === "all" ? "Todos" : ASSET_LABELS[cls] ?? cls}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ── MOBILE: cards ── */}
+          <div className="space-y-2 lg:hidden">
+            {posLoading ? (
+              Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)
+            ) : filteredPositions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-10 gap-3">
+                <TrendingUp className="h-8 w-8 text-muted-foreground/40" />
+                <p className="text-sm text-muted-foreground">No hay posiciones</p>
+                <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5">
+                  <Plus className="h-3.5 w-3.5" /> Añadir primera posición
+                </Button>
+              </div>
+            ) : (
+              filteredPositions.map((p) => {
+                const color = ASSET_COLORS[p.assetClass ?? "other"];
+                return (
+                  <div key={p.id} className="rounded-xl border border-border bg-card overflow-hidden">
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      {/* Asset class dot */}
+                      <div className="h-10 w-10 rounded-full flex items-center justify-center shrink-0" style={{ background: color + "22" }}>
+                        <span className="h-4 w-4 rounded-full" style={{ background: color }} />
+                      </div>
+
+                      {/* Left: ticker + name + meta */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="font-mono font-bold text-sm">{p.ticker}</span>
+                          <span className="text-[10px] font-medium rounded-full px-1.5 py-px"
+                            style={{ background: color + "22", color }}>
+                            {ASSET_LABELS[p.assetClass ?? "other"] ?? p.assetClass}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate leading-tight">{p.name}</p>
+                        <p className="text-[11px] text-muted-foreground/60 mt-0.5">
+                          {p.shares >= 100 ? p.shares.toFixed(2) : p.shares.toFixed(4)} acc · {p.weight.toFixed(1)}% cartera
+                        </p>
+                      </div>
+
+                      {/* Right: value + P&L */}
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-bold tabular-nums">{formatCurrency(p.currentValue)}</p>
+                        <p className={cn("text-xs font-semibold tabular-nums flex items-center justify-end gap-0.5", p.pnlPct >= 0 ? "text-emerald-400" : "text-red-400")}>
+                          {p.pnlPct >= 0 ? <TrendingUp className="h-2.5 w-2.5" /> : <TrendingDown className="h-2.5 w-2.5" />}
+                          {p.pnlPct >= 0 ? "+" : ""}{p.pnlPct.toFixed(2)}%
+                        </p>
+                        <p className={cn("text-[11px] tabular-nums", p.pnlEur >= 0 ? "text-emerald-400" : "text-red-400")}>
+                          {p.pnlEur >= 0 ? "+" : ""}{formatCurrency(p.pnlEur)}
+                        </p>
+                      </div>
+
+                      {/* Actions */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="rounded p-1 hover:bg-muted transition-colors shrink-0 ml-1">
+                            <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-36">
+                          <DropdownMenuItem onClick={() => setEditPos(p)}>
+                            <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-red-400 focus:text-red-400" onClick={() => handleDelete(p.id)}>
+                            <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    {/* Weight bar */}
+                    <div className="h-0.5 bg-muted">
+                      <div className="h-full transition-all" style={{ width: `${Math.min(p.weight, 100)}%`, background: color }} />
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* ── DESKTOP: table ── */}
+          <div className="hidden lg:block rounded-xl border border-border overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-muted/30">
+              <Button size="sm" variant="outline" className="gap-2" onClick={() => setBulkOpen(true)}>
+                <ClipboardPaste className="h-3.5 w-3.5" />Pegar desde broker
+              </Button>
+              <Button size="sm" className="gap-2" onClick={() => setAddOpen(true)}>
+                <Plus className="h-3.5 w-3.5" />Añadir posición
+              </Button>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 border-b border-border">
@@ -246,6 +404,7 @@ export default function InvestmentsPage() {
         </div>
 
       </div>
+
       <AddPositionDialog open={addOpen} onClose={() => setAddOpen(false)} />
       <BulkImportDialog open={bulkOpen} onClose={() => setBulkOpen(false)} />
       {editPos && <EditPositionDialog position={editPos} onClose={() => setEditPos(null)} />}
