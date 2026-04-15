@@ -9,7 +9,6 @@ import { useUIStore, type EditTxData } from "@/store/uiStore";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { CategoryEditor } from "@/components/transactions/CategoryEditor";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils/cn";
@@ -127,32 +126,30 @@ export default function MovimientosPage() {
                           : <ArrowDownLeft className="h-4 w-4 text-red-400" />}
                     </div>
 
-                    {/* Description + category */}
+                    {/* Type + date */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{tx.description}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        <CategoryEditor
-                          transactionId={tx.id}
-                          currentCategory={tx.category ?? null}
-                          currentSubcategory={tx.subcategory ?? null}
-                          currentNotes={tx.notes ?? null}
-                          editedByUser={tx.editedByUser}
-                          description={tx.description}
-                          compact
-                        />
-                        {!accountId && tx.account?.name && (
-                          <>
-                            <span className="text-[10px] text-muted-foreground/50">·</span>
-                            <span className="text-[10px] text-muted-foreground truncate max-w-[90px]">{tx.account.name}</span>
-                          </>
-                        )}
-                      </div>
+                      <p className={cn("text-sm font-semibold", tx.isTransfer ? "text-blue-400" : tx.amount >= 0 ? "text-emerald-400" : "text-foreground")}>
+                        {tx.isTransfer ? "Transferencia" : tx.amount >= 0 ? "Ingreso" : "Gasto"}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        {new Date(tx.date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                      </p>
                     </div>
 
-                    {/* Amount */}
-                    <p className={cn("text-sm font-semibold tabular-nums shrink-0", tx.amount >= 0 ? "text-emerald-400" : "text-foreground")}>
-                      {tx.amount >= 0 ? "+" : ""}{formatCurrency(tx.amount)}
-                    </p>
+                    {/* Amount + category + account */}
+                    <div className="text-right shrink-0 max-w-[130px]">
+                      <p className={cn("text-sm font-semibold tabular-nums", tx.amount >= 0 ? "text-emerald-400" : "text-foreground")}>
+                        {tx.amount >= 0 ? "+" : ""}{formatCurrency(tx.amount)}
+                      </p>
+                      {tx.category && (
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {tx.category}{tx.subcategory ? ` · ${tx.subcategory}` : ""}
+                        </p>
+                      )}
+                      {!accountId && tx.account?.name && (
+                        <p className="text-[10px] text-muted-foreground/60 truncate">{tx.account.name}</p>
+                      )}
+                    </div>
 
                     {/* Row actions */}
                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-all shrink-0">

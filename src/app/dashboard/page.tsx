@@ -211,24 +211,31 @@ export default function InicioPage() {
                   className={cn("flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors cursor-pointer", i < recentTxs.length - 1 && "border-b border-border")}
                   onClick={() => setEditTx({ id: tx.id, amount: tx.amount, description: tx.description, date: tx.date, accountId: tx.accountId, category: tx.category ?? null, subcategory: tx.subcategory ?? null, notes: tx.notes ?? null, isTransfer: tx.isTransfer ?? false } as EditTxData)}
                 >
+                  {/* Icon */}
                   <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", tx.isTransfer ? "bg-blue-400/10" : tx.amount >= 0 ? "bg-emerald-400/10" : "bg-red-400/10")}>
                     {tx.isTransfer ? <ArrowLeftRight className="h-4 w-4 text-blue-400" /> : tx.amount >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-red-400" />}
                   </div>
+                  {/* Type + date */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{tx.description}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="text-[10px] text-muted-foreground">{new Date(tx.date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</span>
-                      {tx.category && (
-                        <>
-                          <span className="text-[10px] text-muted-foreground">·</span>
-                          <span className="rounded-full bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">{tx.category}</span>
-                        </>
-                      )}
-                    </div>
+                    <p className={cn("text-sm font-semibold", tx.isTransfer ? "text-blue-400" : tx.amount >= 0 ? "text-emerald-400" : "text-foreground")}>
+                      {tx.isTransfer ? "Transferencia" : tx.amount >= 0 ? "Ingreso" : "Gasto"}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {new Date(tx.date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                    </p>
                   </div>
-                  <p className={cn("text-sm font-semibold shrink-0", tx.amount >= 0 ? "text-emerald-400" : "text-red-400")}>
-                    {tx.amount >= 0 ? "+" : ""}{formatCurrency(tx.amount)}
-                  </p>
+                  {/* Amount + category + account */}
+                  <div className="text-right shrink-0 max-w-[130px]">
+                    <p className={cn("text-sm font-semibold tabular-nums", tx.amount >= 0 ? "text-emerald-400" : "text-foreground")}>
+                      {tx.amount >= 0 ? "+" : ""}{formatCurrency(tx.amount)}
+                    </p>
+                    {tx.category && (
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {tx.category}{tx.subcategory ? ` · ${tx.subcategory}` : ""}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-muted-foreground/60 truncate">{tx.account.name}</p>
+                  </div>
                 </div>
               ))
             )}
