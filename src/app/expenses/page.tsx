@@ -43,8 +43,16 @@ export default function ExpensesPage() {
     accountId: accountId || undefined,
     category: txCategory || undefined,
     subcategory: txSubcategory || undefined,
+    // Filter by the selected month server-side so pagination works correctly
+    dateFrom: `${selectedMonth}-01`,
+    dateTo: (() => {
+      const d = new Date(`${selectedMonth}-01`);
+      d.setMonth(d.getMonth() + 1);
+      d.setDate(0); // last day of selectedMonth
+      return d.toISOString().slice(0, 10);
+    })(),
     page: txPage,
-    limit: 20,
+    limit: 200, // enough for a full month across all accounts
   });
 
   const categories = catData?.data ?? [];
@@ -58,11 +66,10 @@ export default function ExpensesPage() {
     return { val, label };
   });
 
-  // Filter transactions to the selected month
-  const monthTxs = (txData?.data ?? []).filter((tx) => {
-    const txMonth = new Date(tx.date).toISOString().slice(0, 7);
-    return txMonth === selectedMonth;
-  }).filter((tx) => view === "income" ? tx.amount > 0 : tx.amount < 0);
+  // The API already filters by selectedMonth (dateFrom/dateTo), just filter by income/expense view
+  const monthTxs = (txData?.data ?? []).filter(
+    (tx) => view === "income" ? tx.amount > 0 : tx.amount < 0
+  );
 
   // Subcategory options based on selected tx category
   const selectedTxCategoryObj = userCategories.find((c) => c.name === txCategory);
@@ -281,10 +288,10 @@ export default function ExpensesPage() {
               </tbody>
             </table>
           </div>
-          {(txData?.meta?.total ?? 0) > 20 && (
+          {(txData?.meta?.total ?? 0) > 200 && (
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" disabled={txPage <= 1} onClick={() => setTxPage(p => p - 1)}>Anterior</Button>
-              <Button variant="outline" size="sm" disabled={txPage * 20 >= (txData?.meta?.total ?? 0)} onClick={() => setTxPage(p => p + 1)}>Siguiente</Button>
+              <Button variant="outline" size="sm" disabled={txPage * 200 >= (txData?.meta?.total ?? 0)} onClick={() => setTxPage(p => p + 1)}>Siguiente</Button>
             </div>
           )}
         </div>
