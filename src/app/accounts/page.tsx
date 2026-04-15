@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Filter, MoreVertical, Pencil, Trash2, Download, Tag } from "lucide-react";
+import { Plus, Search, Filter, MoreVertical, Pencil, Trash2, Download, Tag, History } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -33,6 +33,9 @@ export default function AccountsPage() {
   const [page, setPage] = useState(1);
   const [onlyUnedited, setOnlyUnedited] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [importHistoryOpen, setImportHistoryOpen] = useState(false);
+  const [deleteTxId, setDeleteTxId] = useState<string | null>(null);
+  const [deleteTxPending, setDeleteTxPending] = useState(false);
 
   // Bulk selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -108,6 +111,20 @@ export default function AccountsPage() {
 
   const bulkCatObj = userCategories.find((c) => c.name === bulkCategory);
   const bulkSubcategoryOptions = bulkCatObj?.children ?? [];
+
+  async function deleteTransaction() {
+    if (!deleteTxId) return;
+    setDeleteTxPending(true);
+    try {
+      await fetch(`/api/transactions/${deleteTxId}`, { method: "DELETE" });
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+      qc.invalidateQueries({ queryKey: ["analytics"] });
+      setSelectedIds((prev) => { const n = new Set(prev); n.delete(deleteTxId); return n; });
+    } finally {
+      setDeleteTxPending(false);
+      setDeleteTxId(null);
+    }
+  }
 
   async function applyBulk() {
     if (!bulkCategory) return;
@@ -246,21 +263,32 @@ export default function AccountsPage() {
             />
             Solo sin editar
           </label>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 ml-auto"
-            onClick={() => {
-              const params = new URLSearchParams();
-              if (selectedAccount) params.set("accountId", selectedAccount);
-              if (category) params.set("category", category);
-              if (subcategory) params.set("subcategory", subcategory);
-              window.open(`/api/transactions/export?${params}`);
-            }}
-          >
-            <Download className="h-3.5 w-3.5" />
-            Exportar CSV
-          </Button>
+          <div className="ml-auto flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setImportHistoryOpen(true)}
+            >
+              <History className="h-3.5 w-3.5" />
+              Historial importaciones
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => {
+                const params = new URLSearchParams();
+                if (selectedAccount) params.set("accountId", selectedAccount);
+                if (category) params.set("category", category);
+                if (subcategory) params.set("subcategory", subcategory);
+                window.open(`/api/transactions/export?${params}`);
+              }}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Exportar CSV
+            </Button>
+          </div>
         </div>
 
         {/* "Select all filtered" notice */}
@@ -325,13 +353,14 @@ export default function AccountsPage() {
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Categoría</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Cuenta</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Importe</th>
+                  <th className="w-8"></th>
                 </tr>
               </thead>
               <tbody>
                 {txLoading
                   ? Array.from({ length: 8 }).map((_, i) => (
                       <tr key={i} className="border-t border-border">
-                        {Array.from({ length: 6 }).map((_, j) => (
+                        {Array.from({ length: 7 }).map((_, j) => (
                           <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
                         ))}
                       </tr>
@@ -342,7 +371,7 @@ export default function AccountsPage() {
                         <tr
                           key={tx.id}
                           className={cn(
-                            "border-t border-border hover:bg-muted/20 transition-colors",
+                            "group border-t border-border hover:bg-muted/20 transition-colors",
                             isSelected && "bg-primary/5"
                           )}
                         >
@@ -373,11 +402,20 @@ export default function AccountsPage() {
                           <td className={cn("px-4 py-3 text-right font-mono font-semibold tabular-nums", tx.amount >= 0 ? "text-emerald-400" : "text-foreground")}>
                             {tx.amount >= 0 ? "+" : ""}{formatCurrency(tx.amount)}
                           </td>
+                          <td className="px-2 py-3">
+                            <button
+                              onClick={() => setDeleteTxId(tx.id)}
+                              className="opacity-0 group-hover:opacity-100 rounded p-1 text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-all"
+                              title="Eliminar movimiento"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
                         </tr>
                       );
                   })}
                 {!txLoading && pageRows.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">No hay transacciones</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">No hay transacciones</td></tr>
                 )}
               </tbody>
             </table>
@@ -464,6 +502,7 @@ export default function AccountsPage() {
       {editAccount && (
         <EditAccountDialog account={editAccount} onClose={() => setEditAccount(null)} />
       )}
+      {/* Delete account dialog */}
       <Dialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>¿Eliminar cuenta?</DialogTitle></DialogHeader>
@@ -478,6 +517,30 @@ export default function AccountsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete single transaction dialog */}
+      <Dialog open={!!deleteTxId} onOpenChange={(o) => !o && setDeleteTxId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>¿Eliminar movimiento?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Esta acción no se puede deshacer. El movimiento será eliminado permanentemente.</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteTxId(null)}>Cancelar</Button>
+            <Button variant="destructive" disabled={deleteTxPending} onClick={deleteTransaction}>
+              {deleteTxPending ? "Eliminando..." : "Eliminar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import history dialog */}
+      <ImportHistoryDialog
+        open={importHistoryOpen}
+        onClose={() => setImportHistoryOpen(false)}
+        onDeleted={() => {
+          qc.invalidateQueries({ queryKey: ["transactions"] });
+          qc.invalidateQueries({ queryKey: ["analytics"] });
+        }}
+      />
     </div>
   );
 }
@@ -586,5 +649,126 @@ function AddAccountDialog({ open, onClose }: { open: boolean; onClose: () => voi
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+interface ImportBatch {
+  createdAt: string;
+  accountId: string;
+  accountName: string;
+  accountBank: string;
+  count: number;
+  dateFrom: string | null;
+  dateTo: string | null;
+}
+
+function ImportHistoryDialog({ open, onClose, onDeleted }: { open: boolean; onClose: () => void; onDeleted: () => void }) {
+  const [batches, setBatches] = useState<ImportBatch[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [confirmBatch, setConfirmBatch] = useState<ImportBatch | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    setLoading(true);
+    fetch("/api/import/bank/batches")
+      .then((r) => r.json())
+      .then((json) => setBatches(json.data ?? []))
+      .finally(() => setLoading(false));
+  }, [open]);
+
+  async function deleteBatch(batch: ImportBatch) {
+    setDeleting(batch.createdAt);
+    try {
+      await fetch("/api/import/bank/batches", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ createdAt: batch.createdAt, accountId: batch.accountId }),
+      });
+      onDeleted();
+      setBatches((prev) => prev.filter((b) => b.createdAt !== batch.createdAt || b.accountId !== batch.accountId));
+    } finally {
+      setDeleting(null);
+      setConfirmBatch(null);
+    }
+  }
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-4 w-4" />
+              Historial de importaciones
+            </DialogTitle>
+          </DialogHeader>
+          {loading ? (
+            <div className="space-y-2 py-2">
+              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+            </div>
+          ) : batches.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-6 text-center">No hay importaciones registradas.</p>
+          ) : (
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+              {batches.map((b, i) => (
+                <div key={`${b.createdAt}-${b.accountId}`} className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      {i === 0 && <Badge variant="secondary" className="text-[10px] shrink-0">Última</Badge>}
+                      <span className="text-sm font-medium truncate">{b.accountName}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{b.accountBank}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-0.5 flex flex-wrap gap-x-3">
+                      <span>{b.count} movimientos</span>
+                      {b.dateFrom && b.dateTo && (
+                        <span>
+                          {new Date(b.dateFrom).toLocaleDateString("es-ES")}
+                          {b.dateFrom !== b.dateTo && ` – ${new Date(b.dateTo).toLocaleDateString("es-ES")}`}
+                        </span>
+                      )}
+                      <span>Importado el {new Date(b.createdAt).toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" })}</span>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 text-red-400 border-red-400/30 hover:bg-red-400/10 hover:text-red-400"
+                    onClick={() => setConfirmBatch(b)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                    Eliminar
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="ghost" onClick={onClose}>Cerrar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm batch delete */}
+      <Dialog open={!!confirmBatch} onOpenChange={(o) => !o && setConfirmBatch(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>¿Eliminar importación?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Se eliminarán permanentemente <strong className="text-foreground">{confirmBatch?.count} movimientos</strong> de{" "}
+            <strong className="text-foreground">{confirmBatch?.accountName}</strong>. Esta acción no se puede deshacer.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmBatch(null)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={!!deleting}
+              onClick={() => confirmBatch && deleteBatch(confirmBatch)}
+            >
+              {deleting ? "Eliminando..." : "Eliminar movimientos"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

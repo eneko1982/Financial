@@ -25,5 +25,6 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
 export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
   await prisma.transaction.delete({ where: { id: params.id } });
+  invalidateFinancialContext();
   return NextResponse.json({ data: null, error: null });
 }
