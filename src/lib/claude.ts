@@ -27,8 +27,36 @@ export function buildSystemPrompt(ctx: import("@/types/financial").FinancialCont
     .map((b) => `  - ${b.category}: ${formatEur(b.spent)} gastado de ${formatEur(b.budget)} (${b.percent.toFixed(0)}%)`)
     .join("\n");
 
-  // Last 90 days transactions — show up to 100 most recent, formatted as TSV for compactness
-  const txLines = (ctx.recentTransactions ?? []).slice(0, 100).map(
+  // Build monthly summaries from all transactions (so Claude always knows month totals
+  // even if the detailed list is long)
+  const allTxs = ctx.recentTransactions ?? [];
+  type MonthSummary = { income: number; expenses: number };
+  const monthMap: Record<string, MonthSummary> = {};
+  for (const t of allTxs) {
+    const key = t.date.slice(3, 10); // "MM/YYYY" from "DD/MM/YYYY"
+    if (!monthMap[key]) monthMap[key] = { income: 0, expenses: 0 };
+    if (t.amount > 0) monthMap[key].income  += t.amount;
+    else              monthMap[key].expenses += Math.abs(t.amount);
+  }
+  const monthSummaryLines = Object.entries(monthMap)
+    .sort(([a], [b]) => {
+      // sort "MM/YYYY" chronologically
+      const [am, ay] = a.split("/"); const [bm, by] = b.split("/");
+      return ay !== by ? Number(ay) - Number(by) : Number(am) - Number(bm);
+    })
+    .map(([month, s]) => {
+      const label = (() => {
+        const [m, y] = month.split("/");
+        const names = ["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+        return `${names[Number(m)]} ${y}`;
+      })();
+      const savings = s.income - s.expenses;
+      const rate = s.income > 0 ? ((savings / s.income) * 100).toFixed(0) : "—";
+      return `  ${label.padEnd(18)} | Ingresos: ${formatEur(s.income).padStart(12)} | Gastos: ${formatEur(s.expenses).padStart(12)} | Ahorro: ${formatEur(savings).padStart(12)} (${rate}%)`;
+    }).join("\n");
+
+  // Individual transactions — all of them (ordered desc by date), formatted as compact TSV
+  const txLines = allTxs.map(
     (t) => `${t.date}\t${t.bank}/${t.account}\t${t.amount >= 0 ? "+" : ""}${t.amount.toFixed(2)} €\t${t.category ?? "—"}\t${t.description}`
   ).join("\n");
 
@@ -65,13 +93,16 @@ ${goalList || "  (sin objetivos definidos)"}
 ### Presupuesto Mensual
 ${budgetList || "  (sin presupuestos definidos)"}
 
-### Historial de movimientos (últimos 90 días)
+### Resumen mensual (desde enero 2026)
+${monthSummaryLines || "  (sin datos)"}
+
+### Historial de movimientos detallado (desde el 1 de enero de 2026)
 Formato: Fecha | Banco/Cuenta | Importe | Categoría | Descripción
-${txLines || "  (sin movimientos recientes)"}
+${txLines || "  (sin movimientos)"}
 
 ## Tu rol
 - Analiza la situación financiera basándote ÚNICAMENTE en los datos anteriores
-- Tienes acceso al historial COMPLETO de movimientos (últimos 90 días) — úsalo para dar análisis detallados
+- Tienes acceso al historial COMPLETO de movimientos desde el 1 de enero de 2026 — úsalo para dar análisis detallados por mes
 - Da consejos concretos, accionables y específicos a la situación del usuario
 - Cuando calcules proyecciones, explica brevemente los supuestos
 - Si te preguntan algo para lo que no tienes datos, indícalo claramente
