@@ -45,7 +45,28 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
+  // Fetch before deleting so we can adjust the balance snapshot
+  const tx = await prisma.transaction.findUnique({
+    where: { id: params.id },
+    select: { amount: true, accountId: true },
+  });
+
   await prisma.transaction.delete({ where: { id: params.id } });
+
+  // Remove this transaction's contribution from the AccountBalance snapshot
+  if (tx) {
+    const snap = await prisma.accountBalance.findFirst({
+      where: { accountId: tx.accountId },
+      orderBy: { date: "desc" },
+    });
+    if (snap) {
+      await prisma.accountBalance.update({
+        where: { id: snap.id },
+        data: { balance: snap.balance - tx.amount },
+      });
+    }
+  }
+
   invalidateFinancialContext();
   return NextResponse.json({ data: null, error: null });
 }

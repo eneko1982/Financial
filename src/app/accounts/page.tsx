@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
-import { Plus, Search, Filter, MoreVertical, Pencil, Trash2, Download, Tag, PenLine } from "lucide-react";
+import { useState } from "react";
+import { Plus, Search, Filter, MoreVertical, Pencil, Trash2, Download, PenLine } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -34,13 +34,6 @@ export default function AccountsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTxId, setDeleteTxId] = useState<string | null>(null);
   const [deleteTxPending, setDeleteTxPending] = useState(false);
-
-  // Bulk selection
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [selectAllFiltered, setSelectAllFiltered] = useState(false);
-  const [bulkCategory, setBulkCategory] = useState("");
-  const [bulkSubcategory, setBulkSubcategory] = useState("");
-  const [bulkApplying, setBulkApplying] = useState(false);
   const qc = useQueryClient();
   const [editAccount, setEditAccount] = useState<{ id: string; name: string; bank: string; type: string } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -64,50 +57,8 @@ export default function AccountsPage() {
     ? selectedCategoryObj.children
     : userCategories.flatMap((c) => c.children);
 
-  // Bulk selection helpers
   const pageRows = txData?.data ?? [];
-  const pageIds = pageRows.map((t) => t.id);
-  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
-  const somePageSelected = pageIds.some((id) => selectedIds.has(id));
   const totalResults = txData?.meta?.total ?? 0;
-
-  // Reset selection when filters or page changes
-  useEffect(() => {
-    setSelectedIds(new Set());
-    setSelectAllFiltered(false);
-  }, [selectedAccount, search, category, subcategory, page]);
-
-  function toggleRow(id: string) {
-    setSelectAllFiltered(false);
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
-
-  function toggleAllPage() {
-    setSelectAllFiltered(false);
-    if (allPageSelected) {
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        pageIds.forEach((id) => next.delete(id));
-        return next;
-      });
-    } else {
-      setSelectedIds((prev) => new Set(Array.from(prev).concat(pageIds)));
-    }
-  }
-
-  function clearSelection() {
-    setSelectedIds(new Set());
-    setSelectAllFiltered(false);
-    setBulkCategory("");
-    setBulkSubcategory("");
-  }
-
-  const bulkCatObj = userCategories.find((c) => c.name === bulkCategory);
-  const bulkSubcategoryOptions = bulkCatObj?.children ?? [];
 
   async function deleteTransaction() {
     if (!deleteTxId) return;
@@ -116,44 +67,10 @@ export default function AccountsPage() {
       await fetch(`/api/transactions/${deleteTxId}`, { method: "DELETE" });
       qc.invalidateQueries({ queryKey: ["transactions"] });
       qc.invalidateQueries({ queryKey: ["analytics"] });
-      setSelectedIds((prev) => { const n = new Set(prev); n.delete(deleteTxId); return n; });
+      qc.invalidateQueries({ queryKey: ["accounts"] });
     } finally {
       setDeleteTxPending(false);
       setDeleteTxId(null);
-    }
-  }
-
-  async function applyBulk() {
-    if (!bulkCategory) return;
-    setBulkApplying(true);
-    try {
-      const body = selectAllFiltered
-        ? {
-            filter: {
-              accountId: selectedAccount || undefined,
-              search: search || undefined,
-              category: category || undefined,
-              subcategory: subcategory || undefined,
-            },
-            category: bulkCategory,
-            subcategory: bulkSubcategory || null,
-          }
-        : {
-            ids: Array.from(selectedIds),
-            category: bulkCategory,
-            subcategory: bulkSubcategory || null,
-          };
-
-      await fetch("/api/transactions/bulk-update", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      qc.invalidateQueries({ queryKey: ["transactions"] });
-      qc.invalidateQueries({ queryKey: ["analytics"] });
-      clearSelection();
-    } finally {
-      setBulkApplying(false);
     }
   }
 
@@ -162,47 +79,101 @@ export default function AccountsPage() {
       <Header title="Cuentas Bancarias" />
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
 
-        {/* Account cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Account list (mobile) / card grid (desktop) */}
+        {/* Mobile: stacked full-width list items */}
+        <div className="flex flex-col gap-2 lg:hidden">
           {accountsLoading
-            ? Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-28 rounded-xl" />
-              ))
+            ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)
+            : accounts.map((acc) => {
+                const TYPE_LABELS: Record<string, string> = { checking: "Corriente", savings: "Ahorro", credit: "Crédito", epsv: "EPSV", investment: "Inversión" };
+                return (
+                  <div
+                    key={acc.id}
+                    onClick={() => setSelectedAccount(selectedAccount === acc.id ? "" : acc.id)}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-all active:scale-[0.98]",
+                      selectedAccount === acc.id ? "border-primary/70 bg-primary/5" : "border-border bg-card"
+                    )}
+                  >
+                    {/* Color dot */}
+                    <span className="h-3 w-3 rounded-full shrink-0" style={{ background: BANK_COLORS[acc.bank] ?? "#6366f1" }} />
+                    {/* Name + meta */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{acc.name}</p>
+                      <p className="text-xs text-muted-foreground">{acc.bank} · {TYPE_LABELS[acc.type] ?? acc.type}</p>
+                    </div>
+                    {/* Balance */}
+                    <p className={cn("text-base font-bold tabular-nums shrink-0", acc.balance >= 0 ? "text-foreground" : "text-red-400")}>
+                      {formatCurrency(acc.balance)}
+                    </p>
+                    {/* Actions */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                        <button className="rounded p-1 hover:bg-muted transition-colors">
+                          <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-36" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                        <DropdownMenuItem onClick={() => setEditAccount({ id: acc.id, name: acc.name, bank: acc.bank, type: acc.type })}>
+                          <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-red-400 focus:text-red-400" onClick={() => setDeleteId(acc.id)}>
+                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                );
+              })}
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-3 rounded-xl border-2 border-dashed border-border px-4 py-3 text-muted-foreground hover:border-primary/50 hover:text-foreground transition-all"
+          >
+            <Plus className="h-5 w-5 shrink-0" />
+            <span className="text-sm font-medium">Añadir cuenta</span>
+          </button>
+        </div>
+
+        {/* Desktop: card grid */}
+        <div className="hidden lg:grid lg:grid-cols-4 gap-4">
+          {accountsLoading
+            ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)
             : accounts.map((acc) => (
-            <div
-              key={acc.id}
-              onClick={() => setSelectedAccount(selectedAccount === acc.id ? "" : acc.id)}
-              className={cn(
-                "rounded-xl border p-4 text-left transition-all hover:border-primary/50 cursor-pointer relative",
-                selectedAccount === acc.id ? "border-primary/70 bg-primary/5" : "border-border bg-card"
-              )}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: BANK_COLORS[acc.bank] ?? "#6366f1" }}>{acc.bank}</span>
-                <div className="flex items-center gap-1">
-                  <Badge variant="secondary" className="text-[10px]">{acc.type === "checking" ? "Corriente" : acc.type === "savings" ? "Ahorro" : acc.type}</Badge>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                      <button className="rounded p-0.5 hover:bg-muted transition-colors ml-1">
-                        <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-36" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
-                      <DropdownMenuItem onClick={() => setEditAccount({ id: acc.id, name: acc.name, bank: acc.bank, type: acc.type })}>
-                        <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-red-400 focus:text-red-400" onClick={() => setDeleteId(acc.id)}>
-                        <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+              <div
+                key={acc.id}
+                onClick={() => setSelectedAccount(selectedAccount === acc.id ? "" : acc.id)}
+                className={cn(
+                  "rounded-xl border p-4 text-left transition-all hover:border-primary/50 cursor-pointer",
+                  selectedAccount === acc.id ? "border-primary/70 bg-primary/5" : "border-border bg-card"
+                )}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: BANK_COLORS[acc.bank] ?? "#6366f1" }}>{acc.bank}</span>
+                  <div className="flex items-center gap-1">
+                    <Badge variant="secondary" className="text-[10px]">{acc.type === "checking" ? "Corriente" : acc.type === "savings" ? "Ahorro" : acc.type}</Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                        <button className="rounded p-0.5 hover:bg-muted transition-colors ml-1">
+                          <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-36" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+                        <DropdownMenuItem onClick={() => setEditAccount({ id: acc.id, name: acc.name, bank: acc.bank, type: acc.type })}>
+                          <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-red-400 focus:text-red-400" onClick={() => setDeleteId(acc.id)}>
+                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
+                <p className="text-sm text-muted-foreground truncate">{acc.name}</p>
+                <p className={cn("text-xl font-bold tabular-nums mt-1", acc.balance >= 0 ? "text-foreground" : "text-red-400")}>{formatCurrency(acc.balance)}</p>
               </div>
-              <p className="text-sm text-muted-foreground truncate">{acc.name}</p>
-              <p className={cn("text-xl font-bold tabular-nums mt-1", acc.balance >= 0 ? "text-foreground" : "text-red-400")}>{formatCurrency(acc.balance)}</p>
-            </div>
-          ))}
+            ))}
           <button
             onClick={() => setCreateOpen(true)}
             className="rounded-xl border-2 border-dashed border-border p-4 text-center hover:border-primary/50 hover:bg-muted/30 transition-all flex flex-col items-center justify-center gap-2"
@@ -269,32 +240,6 @@ export default function AccountsPage() {
           </div>
         </div>
 
-        {/* "Select all filtered" notice */}
-        {allPageSelected && !selectAllFiltered && totalResults > pageIds.length && (
-          <div className="flex items-center gap-3 rounded-lg bg-primary/10 border border-primary/20 px-4 py-2.5 text-sm">
-            <span className="text-muted-foreground">
-              Seleccionados <strong className="text-foreground">{selectedIds.size}</strong> de esta página.
-            </span>
-            <button
-              onClick={() => setSelectAllFiltered(true)}
-              className="text-primary font-medium hover:underline"
-            >
-              Seleccionar los {totalResults} resultados del filtro actual
-            </button>
-          </div>
-        )}
-        {selectAllFiltered && (
-          <div className="flex items-center gap-3 rounded-lg bg-primary/10 border border-primary/20 px-4 py-2.5 text-sm">
-            <span>
-              <strong className="text-foreground">{totalResults} transacciones</strong>{" "}
-              <span className="text-muted-foreground">seleccionadas (todos los resultados del filtro).</span>
-            </span>
-            <button onClick={() => setSelectAllFiltered(false)} className="text-muted-foreground hover:text-foreground underline text-xs">
-              Deshacer
-            </button>
-          </div>
-        )}
-
         {/* Filter summary */}
         {!txLoading && (search || category || subcategory || selectedAccount) && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -316,51 +261,28 @@ export default function AccountsPage() {
             <table className="w-full text-sm">
               <thead className="bg-muted/50 border-b border-border">
                 <tr>
-                  <th className="px-3 py-3 w-10">
-                    <input
-                      type="checkbox"
-                      checked={allPageSelected}
-                      ref={(el) => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
-                      onChange={toggleAllPage}
-                      className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
-                      title="Seleccionar página"
-                    />
-                  </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Fecha</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Descripción</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Categoría</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Cuenta</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Importe</th>
-                  <th className="w-8"></th>
+                  <th className="w-16"></th>
                 </tr>
               </thead>
               <tbody>
                 {txLoading
                   ? Array.from({ length: 8 }).map((_, i) => (
                       <tr key={i} className="border-t border-border">
-                        {Array.from({ length: 7 }).map((_, j) => (
+                        {Array.from({ length: 6 }).map((_, j) => (
                           <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
                         ))}
                       </tr>
                     ))
-                  : pageRows.map((tx) => {
-                      const isSelected = selectedIds.has(tx.id);
-                      return (
+                  : pageRows.map((tx) => (
                         <tr
                           key={tx.id}
-                          className={cn(
-                            "group border-t border-border hover:bg-muted/20 transition-colors",
-                            isSelected && "bg-primary/5"
-                          )}
+                          className="group border-t border-border hover:bg-muted/20 transition-colors"
                         >
-                          <td className="px-3 py-3">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => toggleRow(tx.id)}
-                              className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
-                            />
-                          </td>
                           <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{new Date(tx.date).toLocaleDateString("es-ES")}</td>
                           <td className="px-4 py-3 max-w-[280px]">
                             <p className="truncate font-medium">{tx.description}</p>
@@ -409,10 +331,9 @@ export default function AccountsPage() {
                             </div>
                           </td>
                         </tr>
-                      );
-                  })}
+                      ))}
                 {!txLoading && pageRows.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-12 text-center text-sm text-muted-foreground">No hay transacciones</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">No hay transacciones</td></tr>
                 )}
               </tbody>
             </table>
@@ -444,55 +365,6 @@ export default function AccountsPage() {
             </div>
           )}
         </div>
-
-        {/* Bulk action bar — slides in when rows are selected */}
-        {(selectedIds.size > 0 || selectAllFiltered) && (
-          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl border border-border bg-card shadow-2xl px-5 py-3.5 text-sm">
-            <span className="font-semibold text-foreground whitespace-nowrap">
-              {selectAllFiltered ? totalResults : selectedIds.size} seleccionados
-            </span>
-            <div className="w-px h-5 bg-border" />
-            <Select value={bulkCategory || "none"} onValueChange={(v) => { setBulkCategory(v === "none" ? "" : v); setBulkSubcategory(""); }}>
-              <SelectTrigger className="h-8 w-44 text-xs">
-                <Tag className="h-3 w-3 mr-1.5 text-muted-foreground" />
-                <SelectValue placeholder="Categoría…" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Seleccionar categoría…</SelectItem>
-                {userCategories.map((c) => (
-                  <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {bulkSubcategoryOptions.length > 0 && (
-              <Select value={bulkSubcategory || "none"} onValueChange={(v) => setBulkSubcategory(v === "none" ? "" : v)}>
-                <SelectTrigger className="h-8 w-40 text-xs">
-                  <SelectValue placeholder="Subcategoría…" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin subcategoría</SelectItem>
-                  {bulkSubcategoryOptions.map((s) => (
-                    <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <Button
-              size="sm"
-              disabled={!bulkCategory || bulkApplying}
-              onClick={applyBulk}
-              className="h-8 px-4"
-            >
-              {bulkApplying ? "Aplicando…" : "Aplicar"}
-            </Button>
-            <button
-              onClick={clearSelection}
-              className="text-muted-foreground hover:text-foreground transition-colors text-xs"
-            >
-              Cancelar
-            </button>
-          </div>
-        )}
 
       </div>
       <AddAccountDialog open={createOpen} onClose={() => setCreateOpen(false)} />
