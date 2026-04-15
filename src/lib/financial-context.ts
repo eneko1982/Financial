@@ -1,5 +1,5 @@
 import { prisma } from "./prisma";
-import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths, subDays } from "date-fns";
 import { es } from "date-fns/locale";
 import type { FinancialContext } from "@/types/financial";
 import { calcSavingsRate, calcTotalReturn, calcGoalProgress, isInternalTransfer } from "./utils/calculations";
@@ -143,6 +143,27 @@ export async function buildFinancialContext(): Promise<FinancialContext> {
     })
   );
 
+  // ── Full transaction history (last 90 days, excluding internal transfers) ──
+  // Provides the AI advisor with real movement data, not just aggregated summaries.
+  const ninetyDaysAgo = subDays(now, 90);
+  const rawRecentTxs = await prisma.transaction.findMany({
+    where: { date: { gte: ninetyDaysAgo } },
+    orderBy: { date: "desc" },
+    take: 300,
+    include: { account: { select: { name: true, bank: true } } },
+  });
+  const recentTransactions = rawRecentTxs
+    .filter((t) => !isInternalTransfer(t.category, t.description))
+    .map((t) => ({
+      date: format(t.date, "dd/MM/yyyy"),
+      description: t.description,
+      amount: t.amount,
+      category: t.category,
+      subcategory: t.subcategory,
+      account: t.account.name,
+      bank: t.account.bank,
+    }));
+
   return {
     date: format(now, "d 'de' MMMM yyyy", { locale: es }),
     netWorth,
@@ -167,5 +188,6 @@ export async function buildFinancialContext(): Promise<FinancialContext> {
     topPositions,
     goals: goalList,
     budgets: budgetList,
+    recentTransactions,
   };
 }

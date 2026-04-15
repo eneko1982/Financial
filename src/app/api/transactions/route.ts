@@ -5,6 +5,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const accountId = searchParams.get("accountId");
   const category = searchParams.get("category");
+  const subcategory = searchParams.get("subcategory");
   const dateFrom = searchParams.get("dateFrom");
   const dateTo = searchParams.get("dateTo");
   const search = searchParams.get("search");
@@ -14,6 +15,7 @@ export async function GET(req: NextRequest) {
   const where: Record<string, unknown> = {};
   if (accountId) where.accountId = accountId;
   if (category) where.category = category;
+  if (subcategory) where.subcategory = subcategory;
   if (dateFrom || dateTo) {
     where.date = {
       ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
@@ -31,7 +33,22 @@ export async function GET(req: NextRequest) {
       orderBy: { date: "desc" },
       skip: (page - 1) * limit,
       take: limit,
-      include: { account: { select: { name: true, bank: true, color: true } } },
+      select: {
+        id: true,
+        date: true,
+        description: true,
+        amount: true,
+        balance: true,
+        category: true,
+        subcategory: true,
+        notes: true,
+        isTransfer: true,
+        editedByUser: true,
+        importHash: true,
+        createdAt: true,
+        accountId: true,
+        account: { select: { name: true, bank: true, color: true } },
+      },
     }),
   ]);
 

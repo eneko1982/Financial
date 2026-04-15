@@ -4,6 +4,7 @@ import { Plus, Search, Filter, MoreVertical, Pencil, Trash2 } from "lucide-react
 import { Header } from "@/components/layout/Header";
 import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useUserCategories } from "@/hooks/useUserCategories";
 import { useUIStore } from "@/store/uiStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,9 +23,11 @@ const BANK_COLORS: Record<string, string> = {
 
 export default function AccountsPage() {
   const { data: accounts = [] } = useAccounts();
+  const { data: userCategories = [] } = useUserCategories();
   const [selectedAccount, setSelectedAccount] = useState<string>("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
+  const [subcategory, setSubcategory] = useState("");
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [editAccount, setEditAccount] = useState<{ id: string; name: string; bank: string; type: string } | null>(null);
@@ -36,11 +39,18 @@ export default function AccountsPage() {
     accountId: selectedAccount || undefined,
     search: search || undefined,
     category: category || undefined,
+    subcategory: subcategory || undefined,
     page,
     limit: 30,
   });
 
   const totalBalance = accounts.reduce((s, a) => s + a.balance, 0);
+
+  // Subcategory options: children of selected category (if any), else all children across categories
+  const selectedCategoryObj = userCategories.find((c) => c.name === category);
+  const subcategoryOptions = selectedCategoryObj
+    ? selectedCategoryObj.children
+    : userCategories.flatMap((c) => c.children);
 
   return (
     <div>
@@ -106,18 +116,31 @@ export default function AccountsPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input placeholder="Buscar transacciones..." className="pl-9" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
           </div>
-          <Select value={category} onValueChange={(v) => { setCategory(v === "all" ? "" : v); setPage(1); }}>
+          <Select value={category || "all"} onValueChange={(v) => { setCategory(v === "all" ? "" : v); setSubcategory(""); setPage(1); }}>
             <SelectTrigger className="w-48">
               <Filter className="h-3.5 w-3.5 mr-1.5" />
               <SelectValue placeholder="Categoría" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas las categorías</SelectItem>
-              {["Alimentación","Restaurantes","Transporte","Salud","Entretenimiento","Ropa","Hogar","Suministros","Telecomunicaciones","Seguros","Educación","Viajes"].map((c) => (
-                <SelectItem key={c} value={c}>{c}</SelectItem>
+              {userCategories.map((c) => (
+                <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {subcategoryOptions.length > 0 && (
+            <Select value={subcategory || "all"} onValueChange={(v) => { setSubcategory(v === "all" ? "" : v); setPage(1); }}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Subcategoría" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las subcategorías</SelectItem>
+                {subcategoryOptions.map((s) => (
+                  <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {/* Transactions table */}
@@ -141,7 +164,13 @@ export default function AccountsPage() {
                       <p className="truncate font-medium">{tx.description}</p>
                     </td>
                     <td className="px-4 py-3">
-                      <CategoryEditor transactionId={tx.id} currentCategory={tx.category ?? null} />
+                      <CategoryEditor
+                        transactionId={tx.id}
+                        currentCategory={tx.category ?? null}
+                        currentSubcategory={tx.subcategory ?? null}
+                        currentNotes={tx.notes ?? null}
+                        editedByUser={tx.editedByUser}
+                      />
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{tx.account?.name}</td>
                     <td className={cn("px-4 py-3 text-right font-mono font-semibold tabular-nums", tx.amount >= 0 ? "text-emerald-400" : "text-foreground")}>

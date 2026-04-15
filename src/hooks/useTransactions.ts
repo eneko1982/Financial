@@ -1,8 +1,26 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
+export interface Transaction {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  balance: number | null;
+  category: string | null;
+  subcategory: string | null;
+  notes: string | null;
+  isTransfer: boolean;
+  editedByUser: boolean;
+  importHash: string | null;
+  createdAt: string;
+  accountId: string;
+  account: { name: string; bank: string; color: string | null };
+}
+
 interface TransactionFilters {
   accountId?: string;
   category?: string;
+  subcategory?: string;
   dateFrom?: string;
   dateTo?: string;
   search?: string;
@@ -14,6 +32,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
   const params = new URLSearchParams();
   if (filters.accountId) params.set("accountId", filters.accountId);
   if (filters.category) params.set("category", filters.category);
+  if (filters.subcategory) params.set("subcategory", filters.subcategory);
   if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
   if (filters.dateTo) params.set("dateTo", filters.dateTo);
   if (filters.search) params.set("search", filters.search);
@@ -25,10 +44,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
     queryFn: async () => {
       const res = await fetch(`/api/transactions?${params}`);
       const json = await res.json();
-      return { data: json.data, meta: json.meta } as {
-        data: Array<{ id: string; date: string; description: string; amount: number; category: string | null; account: { name: string; bank: string; color: string | null } }>;
-        meta: { total: number; page: number; limit: number };
-      };
+      return { data: json.data as Transaction[], meta: json.meta as { total: number; page: number; limit: number } };
     },
   });
 }
@@ -36,8 +52,20 @@ export function useTransactions(filters: TransactionFilters = {}) {
 export function useUpdateTransaction() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; category?: string; notes?: string }) => {
-      const res = await fetch(`/api/transactions/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data) });
+    mutationFn: async ({
+      id,
+      ...data
+    }: {
+      id: string;
+      category?: string | null;
+      subcategory?: string | null;
+      notes?: string | null;
+    }) => {
+      const res = await fetch(`/api/transactions/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["transactions"] }),

@@ -1,149 +1,297 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useUserCategories } from "@/hooks/useUserCategories";
 import { cn } from "@/lib/utils/cn";
-
-const SUGGESTED = [
-  "Alimentación","Restaurantes","Transporte","Salud","Entretenimiento",
-  "Ropa","Hogar","Suministros","Telecomunicaciones","Seguros",
-  "Educación","Viajes","Nómina","Transferencia","Inversión","Otro",
-];
 
 interface Props {
   transactionId: string;
   currentCategory: string | null;
+  currentSubcategory: string | null;
+  currentNotes: string | null;
+  editedByUser: boolean;
   /** Extra query keys to invalidate after save (besides ["transactions"]) */
   extraInvalidate?: string[][];
 }
 
-export function CategoryEditor({ transactionId, currentCategory, extraInvalidate = [] }: Props) {
+export function CategoryEditor({
+  transactionId,
+  currentCategory,
+  currentSubcategory,
+  currentNotes,
+  editedByUser,
+  extraInvalidate = [],
+}: Props) {
   const [open, setOpen] = useState(false);
-  const [input, setInput] = useState(currentCategory ?? "");
+  const [category, setCategory] = useState(currentCategory ?? "");
+  const [categoryInput, setCategoryInput] = useState("");
+  const [subcategory, setSubcategory] = useState(currentSubcategory ?? "");
+  const [subcategoryInput, setSubcategoryInput] = useState("");
+  const [notes, setNotes] = useState(currentNotes ?? "");
   const [saving, setSaving] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const qc = useQueryClient();
 
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
-    function handler(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  const { data: userCategories = [] } = useUserCategories();
 
-  // Focus input when opened
-  useEffect(() => {
-    if (open) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-      setInput(currentCategory ?? "");
-    }
-  }, [open, currentCategory]);
-
-  async function save(cat: string) {
-    setSaving(true);
-    await fetch(`/api/transactions/${transactionId}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ category: cat || null }),
-    });
-    qc.invalidateQueries({ queryKey: ["transactions"] });
-    for (const keys of extraInvalidate) qc.invalidateQueries({ queryKey: keys });
-    setSaving(false);
-    setOpen(false);
+  // Reset state when dialog opens
+  function handleOpen() {
+    setCategory(currentCategory ?? "");
+    setCategoryInput("");
+    setSubcategory(currentSubcategory ?? "");
+    setSubcategoryInput("");
+    setNotes(currentNotes ?? "");
+    setOpen(true);
   }
 
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === "Enter") { e.preventDefault(); save(input); }
-    if (e.key === "Escape") setOpen(false);
+  // Find the selected top-level category object to get its children
+  const selectedCategoryObj = userCategories.find(
+    (c) => c.name === category
+  );
+  const subcategoryOptions = selectedCategoryObj?.children ?? [];
+
+  // Filtered category chips based on free-text input
+  const filteredCategories = categoryInput
+    ? userCategories.filter((c) =>
+        c.name.toLowerCase().includes(categoryInput.toLowerCase())
+      )
+    : userCategories;
+
+  // Filtered subcategory chips
+  const filteredSubcategories = subcategoryInput
+    ? subcategoryOptions.filter((s) =>
+        s.name.toLowerCase().includes(subcategoryInput.toLowerCase())
+      )
+    : subcategoryOptions;
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const finalCategory = categoryInput.trim() || category || null;
+      const finalSubcategory = subcategoryInput.trim() || subcategory || null;
+      const finalNotes = notes.trim() || null;
+
+      await fetch(`/api/transactions/${transactionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: finalCategory,
+          subcategory: finalSubcategory,
+          notes: finalNotes,
+        }),
+      });
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+      for (const keys of extraInvalidate) {
+        qc.invalidateQueries({ queryKey: keys });
+      }
+      setOpen(false);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
-    <div ref={containerRef} className="relative inline-block">
+    <>
       {/* Trigger */}
       <button
-        onClick={() => setOpen(o => !o)}
-        className={cn(
-          "rounded transition-colors",
-          open && "ring-1 ring-primary/50"
-        )}
-        title="Editar categoría"
+        onClick={handleOpen}
+        className="group flex flex-col items-start gap-0.5 rounded px-1 py-0.5 transition-colors hover:bg-muted/40 text-left min-w-[80px]"
+        title="Editar etiquetas"
       >
-        {currentCategory ? (
-          <Badge variant="secondary" className="text-[10px] cursor-pointer hover:bg-muted">
-            {currentCategory}
+        <div className="flex items-center gap-1">
+          {currentCategory ? (
+            <Badge variant="secondary" className="text-[10px] cursor-pointer">
+              {currentCategory}
+            </Badge>
+          ) : (
+            <span className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground border border-dashed border-muted-foreground/30 rounded px-1.5 py-0.5 cursor-pointer">
+              + categoría
+            </span>
+          )}
+          {editedByUser && (
+            <span className="h-2 w-2 rounded-full bg-blue-400 flex-shrink-0" title="Editado manualmente" />
+          )}
+        </div>
+        {currentSubcategory && (
+          <Badge
+            variant="outline"
+            className="text-[9px] text-muted-foreground border-muted-foreground/30 cursor-pointer"
+          >
+            {currentSubcategory}
           </Badge>
-        ) : (
-          <span className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground border border-dashed border-muted-foreground/30 rounded px-1.5 py-0.5 cursor-pointer">
-            + categoría
-          </span>
         )}
       </button>
 
-      {/* Popover */}
-      {open && (
-        <div className="absolute z-50 left-0 top-full mt-1 w-64 rounded-lg border border-border bg-card shadow-lg p-3 space-y-3">
-          {/* Text input */}
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Escribe o elige categoría..."
-            className="w-full text-xs bg-muted/50 border border-border rounded px-2.5 py-1.5 outline-none focus:border-primary/50 placeholder:text-muted-foreground/50"
-          />
+      {/* Dialog */}
+      <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar etiquetas</DialogTitle>
+            <DialogDescription>
+              Asigna categoría y subcategoría a este movimiento
+            </DialogDescription>
+          </DialogHeader>
 
-          {/* Suggested chips */}
-          <div className="flex flex-wrap gap-1">
-            {SUGGESTED.filter(s => !input || s.toLowerCase().includes(input.toLowerCase())).map(s => (
-              <button
-                key={s}
-                onClick={() => { setInput(s); save(s); }}
-                className={cn(
-                  "text-[10px] px-2 py-0.5 rounded-full border transition-colors",
-                  s === currentCategory
-                    ? "border-primary/50 bg-primary/10 text-primary"
-                    : "border-border hover:border-primary/40 hover:bg-muted/50 text-muted-foreground"
-                )}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+          <div className="space-y-5">
+            {/* Category section */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Categoría</label>
+              {/* Chips */}
+              {filteredCategories.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
+                  {filteredCategories.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => {
+                        setCategory(c.name);
+                        setCategoryInput("");
+                        // Reset subcategory when category changes
+                        setSubcategory("");
+                        setSubcategoryInput("");
+                      }}
+                      className={cn(
+                        "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                        category === c.name
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border hover:border-primary/40 hover:bg-muted/50 text-muted-foreground"
+                      )}
+                      style={
+                        c.color && category !== c.name
+                          ? { borderColor: c.color + "66", color: c.color }
+                          : undefined
+                      }
+                    >
+                      {c.color && (
+                        <span
+                          className="inline-block h-2 w-2 rounded-full mr-1.5 align-middle"
+                          style={{ background: c.color }}
+                        />
+                      )}
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Free-text input */}
+              <Input
+                placeholder="Escribe categoría personalizada..."
+                value={categoryInput}
+                onChange={(e) => {
+                  setCategoryInput(e.target.value);
+                  if (e.target.value) {
+                    setCategory("");
+                    setSubcategory("");
+                    setSubcategoryInput("");
+                  }
+                }}
+                className="text-sm"
+              />
+              {category && !categoryInput && (
+                <p className="text-xs text-primary">
+                  Seleccionada:{" "}
+                  <span className="font-medium">{category}</span>
+                  <button
+                    type="button"
+                    className="ml-2 text-muted-foreground hover:text-foreground underline"
+                    onClick={() => { setCategory(""); setSubcategory(""); }}
+                  >
+                    Quitar
+                  </button>
+                </p>
+              )}
+            </div>
 
-          {/* Action buttons */}
-          <div className="flex items-center justify-between pt-1 border-t border-border">
-            {currentCategory && (
-              <button
-                onClick={() => save("")}
-                className="text-[10px] text-red-400 hover:text-red-300 transition-colors"
-              >
-                Quitar categoría
-              </button>
-            )}
-            <div className="flex gap-2 ml-auto">
-              <button
-                onClick={() => setOpen(false)}
-                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => save(input)}
-                disabled={saving}
-                className="text-[10px] bg-primary text-primary-foreground px-2 py-0.5 rounded hover:bg-primary/90 transition-colors disabled:opacity-50"
-              >
-                {saving ? "..." : "Guardar"}
-              </button>
+            {/* Subcategory section */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Subcategoría</label>
+              {/* Chips — only show if parent category selected and has children */}
+              {filteredSubcategories.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
+                  {filteredSubcategories.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => {
+                        setSubcategory(s.name);
+                        setSubcategoryInput("");
+                      }}
+                      className={cn(
+                        "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                        subcategory === s.name
+                          ? "border-primary bg-primary/15 text-primary"
+                          : "border-border hover:border-primary/40 hover:bg-muted/50 text-muted-foreground"
+                      )}
+                    >
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {filteredSubcategories.length === 0 && !category && (
+                <p className="text-xs text-muted-foreground">Selecciona una categoría primero</p>
+              )}
+              <Input
+                placeholder="Escribe subcategoría personalizada..."
+                value={subcategoryInput}
+                onChange={(e) => {
+                  setSubcategoryInput(e.target.value);
+                  if (e.target.value) setSubcategory("");
+                }}
+                className="text-sm"
+              />
+              {subcategory && !subcategoryInput && (
+                <p className="text-xs text-primary">
+                  Seleccionada:{" "}
+                  <span className="font-medium">{subcategory}</span>
+                  <button
+                    type="button"
+                    className="ml-2 text-muted-foreground hover:text-foreground underline"
+                    onClick={() => setSubcategory("")}
+                  >
+                    Quitar
+                  </button>
+                </p>
+              )}
+            </div>
+
+            {/* Notes section */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                Notas{" "}
+                <span className="text-muted-foreground font-normal">(opcional)</span>
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Añade una nota a este movimiento..."
+                rows={3}
+                className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
             </div>
           </div>
-        </div>
-      )}
-    </div>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="button" disabled={saving} onClick={handleSave}>
+              {saving ? "Guardando..." : "Guardar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -32,23 +32,36 @@ model AccountBalance {
 }
 
 model Transaction {
-  id          String   @id @default(cuid())
-  accountId   String
-  date        DateTime
-  description String
-  amount      Float
-  balance     Float?
-  category    String?
-  subcategory String?
-  notes       String?
-  isTransfer  Boolean  @default(false)
-  importHash  String?  @unique
-  createdAt   DateTime @default(now())
-  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  accountId     String
+  date          DateTime
+  description   String
+  amount        Float
+  balance       Float?
+  category      String?
+  subcategory   String?
+  notes         String?
+  isTransfer    Boolean  @default(false)
+  editedByUser  Boolean  @default(false)
+  importHash    String?  @unique
+  createdAt     DateTime @default(now())
+  account       Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId, date])
   @@index([date])
   @@index([category])
+}
+
+model UserCategory {
+  id        String         @id @default(cuid())
+  name      String
+  parentId  String?
+  parent    UserCategory?  @relation("tree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  UserCategory[] @relation("tree")
+  color     String?
+  createdAt DateTime       @default(now())
+
+  @@unique([name, parentId])
 }
 
 model Budget {

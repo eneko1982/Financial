@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/Header";
 import { useCategories, useBudgets, useCashFlow } from "@/hooks/useAnalytics";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useUserCategories } from "@/hooks/useUserCategories";
 import { useUIStore } from "@/store/uiStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -26,20 +27,24 @@ export default function ExpensesPage() {
   const { selectedMonth, setSelectedMonth } = useUIStore();
   const [view, setView] = useState<ViewType>("expense");
   const [accountId, setAccountId] = useState("");
+  const [txCategory, setTxCategory] = useState("");
+  const [txSubcategory, setTxSubcategory] = useState("");
   const [txPage, setTxPage] = useState(1);
   const [budgetOpen, setBudgetOpen] = useState(false);
   const { setImportOpen } = useUIStore();
 
   const { data: accounts = [] } = useAccounts();
+  const { data: userCategories = [] } = useUserCategories();
   const { data: catData } = useCategories(selectedMonth, view, accountId || undefined);
   const { data: budgets = [] } = useBudgets(selectedMonth);
   const { data: cashFlow = [] } = useCashFlow();
 
   const { data: txData } = useTransactions({
     accountId: accountId || undefined,
+    category: txCategory || undefined,
+    subcategory: txSubcategory || undefined,
     page: txPage,
     limit: 20,
-    // filter by month: add start/end via the hook (will need route to support)
   });
 
   const categories = catData?.data ?? [];
@@ -58,6 +63,12 @@ export default function ExpensesPage() {
     const txMonth = new Date(tx.date).toISOString().slice(0, 7);
     return txMonth === selectedMonth;
   }).filter((tx) => view === "income" ? tx.amount > 0 : tx.amount < 0);
+
+  // Subcategory options based on selected tx category
+  const selectedTxCategoryObj = userCategories.find((c) => c.name === txCategory);
+  const subcategoryOptions = selectedTxCategoryObj
+    ? selectedTxCategoryObj.children
+    : userCategories.flatMap((c) => c.children);
 
   return (
     <div>
@@ -200,9 +211,38 @@ export default function ExpensesPage() {
 
         {/* Transaction list for selected month */}
         <div className="space-y-3">
-          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-            Movimientos — {monthOptions.find(m => m.val === selectedMonth)?.label}
-          </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+              Movimientos — {monthOptions.find(m => m.val === selectedMonth)?.label}
+            </h2>
+            {/* Category filter for transactions */}
+            <div className="ml-auto flex gap-2">
+              <Select value={txCategory || "all"} onValueChange={(v) => { setTxCategory(v === "all" ? "" : v); setTxSubcategory(""); setTxPage(1); }}>
+                <SelectTrigger className="w-44 h-8 text-xs">
+                  <SelectValue placeholder="Categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las categorías</SelectItem>
+                  {userCategories.map((c) => (
+                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {subcategoryOptions.length > 0 && (
+                <Select value={txSubcategory || "all"} onValueChange={(v) => { setTxSubcategory(v === "all" ? "" : v); setTxPage(1); }}>
+                  <SelectTrigger className="w-44 h-8 text-xs">
+                    <SelectValue placeholder="Subcategoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las subcategorías</SelectItem>
+                    {subcategoryOptions.map((s) => (
+                      <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
           <div className="rounded-xl border border-border overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 border-b border-border">
@@ -226,6 +266,9 @@ export default function ExpensesPage() {
                       <CategoryEditor
                         transactionId={tx.id}
                         currentCategory={tx.category ?? null}
+                        currentSubcategory={tx.subcategory ?? null}
+                        currentNotes={tx.notes ?? null}
+                        editedByUser={tx.editedByUser}
                         extraInvalidate={[["analytics", "categories"]]}
                       />
                     </td>

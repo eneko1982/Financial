@@ -49,6 +49,16 @@ export interface ParsedTransaction {
   suggestedCategory?: string;
 }
 
+export interface RecentTransaction {
+  date: string;
+  description: string;
+  amount: number;
+  category: string | null;
+  subcategory: string | null;
+  account: string;
+  bank: string;
+}
+
 export interface FinancialContext {
   date: string;
   netWorth: number;
@@ -68,4 +78,5 @@ export interface FinancialContext {
   topPositions: { ticker: string; name: string; value: number; weight: number; returnPct: number }[];
   goals: { name: string; currentAmount: number; targetAmount: number; progress: number; targetDate?: string }[];
   budgets: { category: string; budget: number; spent: number; percent: number }[];
+  recentTransactions: RecentTransaction[];
 }

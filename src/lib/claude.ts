@@ -27,6 +27,11 @@ export function buildSystemPrompt(ctx: import("@/types/financial").FinancialCont
     .map((b) => `  - ${b.category}: ${formatEur(b.spent)} gastado de ${formatEur(b.budget)} (${b.percent.toFixed(0)}%)`)
     .join("\n");
 
+  // Last 90 days transactions — show up to 100 most recent, formatted as TSV for compactness
+  const txLines = (ctx.recentTransactions ?? []).slice(0, 100).map(
+    (t) => `${t.date}\t${t.bank}/${t.account}\t${t.amount >= 0 ? "+" : ""}${t.amount.toFixed(2)} €\t${t.category ?? "—"}\t${t.description}`
+  ).join("\n");
+
   return `Eres un asesor financiero personal experto y de confianza. Ayudas al usuario a analizar y mejorar su situación financiera de forma clara, precisa y personalizada. Siempre respondes en español, con un tono profesional pero cercano, como un amigo que es asesor financiero.
 
 ## Contexto financiero actual del usuario (actualizado: ${ctx.date})
@@ -60,8 +65,13 @@ ${goalList || "  (sin objetivos definidos)"}
 ### Presupuesto Mensual
 ${budgetList || "  (sin presupuestos definidos)"}
 
+### Historial de movimientos (últimos 90 días)
+Formato: Fecha | Banco/Cuenta | Importe | Categoría | Descripción
+${txLines || "  (sin movimientos recientes)"}
+
 ## Tu rol
 - Analiza la situación financiera basándote ÚNICAMENTE en los datos anteriores
+- Tienes acceso al historial COMPLETO de movimientos (últimos 90 días) — úsalo para dar análisis detallados
 - Da consejos concretos, accionables y específicos a la situación del usuario
 - Cuando calcules proyecciones, explica brevemente los supuestos
 - Si te preguntan algo para lo que no tienes datos, indícalo claramente
