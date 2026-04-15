@@ -3,8 +3,9 @@ import { useState } from "react";
 import {
   ChevronLeft, ChevronRight, Wallet, TrendingUp, TrendingDown,
   Plus, MoreVertical, Pencil, Trash2, ArrowLeftRight, Landmark,
+  ChevronUp, ChevronDown,
 } from "lucide-react";
-import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
+import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount, useReorderAccounts } from "@/hooks/useAccounts";
 import { useLiabilities } from "@/hooks/useLiabilities";
 import { useSummary } from "@/hooks/useAnalytics";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -51,6 +52,15 @@ export default function InicioPage() {
   const [editAccount, setEditAccount] = useState<{ id: string; name: string; bank: string; type: string; includeInNetWorth: boolean } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const deleteAccount = useDeleteAccount();
+  const reorderAccounts = useReorderAccounts();
+
+  function moveAccount(index: number, direction: -1 | 1) {
+    const ids = accounts.map(a => a.id);
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= ids.length) return;
+    [ids[index], ids[newIndex]] = [ids[newIndex], ids[index]];
+    reorderAccounts.mutate(ids);
+  }
 
   const totalAssets = accounts.filter(a => a.includeInNetWorth !== false).reduce((s, a) => s + a.balance, 0);
   const totalLiabilities = liabilityData.reduce((s, l) => s + l.balance, 0);
@@ -130,8 +140,27 @@ export default function InicioPage() {
                     <span className="text-sm font-medium">Añadir primera cuenta</span>
                   </button>
                 )
-                : accounts.map((acc) => (
+                : accounts.map((acc, i) => (
                   <div key={acc.id} className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+                    {/* Reorder arrows */}
+                    <div className="flex flex-col shrink-0 -my-1">
+                      <button
+                        onClick={() => moveAccount(i, -1)}
+                        disabled={i === 0}
+                        className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                        title="Subir"
+                      >
+                        <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                      <button
+                        onClick={() => moveAccount(i, 1)}
+                        disabled={i === accounts.length - 1}
+                        className="p-0.5 rounded hover:bg-muted transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                        title="Bajar"
+                      >
+                        <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    </div>
                     <span className="h-3 w-3 rounded-full shrink-0" style={{ background: BANK_COLORS[acc.bank] ?? "#6366f1" }} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">

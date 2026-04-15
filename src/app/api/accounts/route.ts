@@ -15,7 +15,7 @@ const CreateAccountSchema = z.object({
 export async function GET() {
   const accounts = await prisma.account.findMany({
     where: { isActive: true },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
   });
 
   if (accounts.length === 0) return NextResponse.json({ data: [], error: null });
@@ -84,7 +84,10 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ data: null, error: parsed.error.message }, { status: 400 });
 
   const { initialBalance, ...data } = parsed.data;
-  const account = await prisma.account.create({ data });
+  // Assign sortOrder = max existing + 1 so new accounts go to the bottom
+  const maxOrder = await prisma.account.aggregate({ _max: { sortOrder: true } });
+  const sortOrder = (maxOrder._max.sortOrder ?? -1) + 1;
+  const account = await prisma.account.create({ data: { ...data, sortOrder } });
 
   if (initialBalance !== undefined) {
     await prisma.accountBalance.create({ data: { accountId: account.id, balance: initialBalance, date: new Date() } });

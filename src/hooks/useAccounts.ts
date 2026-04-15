@@ -6,7 +6,7 @@ export function useAccounts() {
     queryFn: async () => {
       const res = await fetch("/api/accounts");
       const json = await res.json();
-      return json.data as Array<{ id: string; name: string; bank: string; type: string; color: string | null; balance: number; currency: string; includeInNetWorth: boolean }>;
+      return json.data as Array<{ id: string; name: string; bank: string; type: string; color: string | null; balance: number; currency: string; includeInNetWorth: boolean; sortOrder: number }>;
     },
   });
 }
@@ -38,6 +38,21 @@ export function useDeleteAccount() {
   return useMutation({
     mutationFn: async (id: string) => {
       const res = await fetch(`/api/accounts/${id}`, { method: "DELETE" });
+      return res.json();
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["accounts"] }),
+  });
+}
+
+export function useReorderAccounts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      const res = await fetch("/api/accounts/reorder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
       return res.json();
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["accounts"] }),
