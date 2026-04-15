@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { useUserCategories } from "@/hooks/useUserCategories";
 import { cn } from "@/lib/utils/cn";
+import { getCategoryColor } from "@/lib/category-classifier";
 
 interface Props {
   transactionId: string;
@@ -140,12 +141,14 @@ export function CategoryEditor({
         <div className="flex items-center gap-1">
           {currentCategory ? (() => {
             const catObj = userCategories.find(c => c.name === currentCategory);
-            const color = catObj?.color;
+            // Priority: user-defined color → system color map → no color
+            const color = catObj?.color ?? getCategoryColor(currentCategory);
+            const hasColor = color && color !== "#6b7280"; // #6b7280 is the "unknown" fallback
             return (
               <Badge
                 variant="secondary"
                 className="text-[10px] cursor-pointer"
-                style={color ? { backgroundColor: `${color}25`, color, borderColor: `${color}50` } : undefined}
+                style={hasColor ? { backgroundColor: `${color}25`, color, borderColor: `${color}50` } : undefined}
               >
                 {currentCategory}
               </Badge>
