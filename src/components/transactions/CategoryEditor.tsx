@@ -27,6 +27,8 @@ interface Props {
   description?: string;
   /** Extra query keys to invalidate after save (besides ["transactions"]) */
   extraInvalidate?: string[][];
+  /** Compact display mode — smaller trigger, no subcategory badge */
+  compact?: boolean;
 }
 
 export function CategoryEditor({
@@ -37,6 +39,7 @@ export function CategoryEditor({
   editedByUser,
   description,
   extraInvalidate = [],
+  compact = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState(currentCategory ?? "");

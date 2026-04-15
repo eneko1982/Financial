@@ -81,7 +81,9 @@ export async function buildFinancialContext(): Promise<FinancialContext> {
     }
     return { ...acc, balance };
   });
-  const totalBankAssets = accountsWithBalance.reduce((s, a) => s + a.balance, 0);
+  const totalBankAssets = accountsWithBalance
+    .filter(a => a.includeInNetWorth !== false)
+    .reduce((s, a) => s + a.balance, 0);
 
   // ── Investment portfolio ────────────────────────────────────────────────────
   const positions = await prisma.investmentPosition.findMany({ include: { account: true } });

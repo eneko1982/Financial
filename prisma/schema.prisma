@@ -14,8 +14,9 @@ model Account {
   bank           String
   currency       String           @default("EUR")
   color          String?
-  isActive       Boolean          @default(true)
-  createdAt      DateTime         @default(now())
+  isActive            Boolean          @default(true)
+  includeInNetWorth   Boolean          @default(true)
+  createdAt           DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   transactions   Transaction[]
   balanceHistory AccountBalance[]

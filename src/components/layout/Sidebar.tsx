@@ -8,9 +8,9 @@ import {
 import { cn } from "@/lib/utils/cn";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/accounts", label: "Cuentas", icon: CreditCard },
-  { href: "/expenses", label: "Gastos", icon: PieChart },
+  { href: "/dashboard", label: "Inicio", icon: LayoutDashboard },
+  { href: "/accounts", label: "Movimientos", icon: CreditCard },
+  { href: "/expenses", label: "Informes", icon: PieChart },
   { href: "/categories", label: "Categorías", icon: Tag },
   { href: "/investments", label: "Inversiones", icon: TrendingUp },
   { href: "/savings", label: "Objetivos", icon: Target },

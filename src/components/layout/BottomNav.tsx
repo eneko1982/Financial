@@ -12,7 +12,7 @@ export function BottomNav({ onAdd }: { onAdd: () => void }) {
     <nav className="fixed bottom-0 left-0 right-0 z-40 lg:hidden bg-card/95 backdrop-blur border-t border-border safe-bottom">
       <div className="flex items-end justify-around h-16 px-1">
         <NavItem href="/dashboard" label="Inicio" icon={Home} active={isActive("/dashboard") || pathname === "/"} />
-        <NavItem href="/accounts" label="Cuentas" icon={ArrowLeftRight} active={isActive("/accounts")} />
+        <NavItem href="/accounts" label="Movimientos" icon={ArrowLeftRight} active={isActive("/accounts")} />
 
         {/* FAB center button */}
         <div className="flex flex-col items-center -mt-5 pb-1">

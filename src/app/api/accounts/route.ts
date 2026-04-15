@@ -5,6 +5,7 @@ import { z } from "zod";
 const CreateAccountSchema = z.object({
   name: z.string().min(1),
   type: z.enum(["checking", "savings", "investment", "credit", "epsv"]),
+  includeInNetWorth: z.boolean().default(true),
   bank: z.string().min(1),
   currency: z.string().default("EUR"),
   color: z.string().optional(),

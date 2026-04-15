@@ -1,35 +1,30 @@
 "use client";
-import { ChevronLeft, ChevronRight, Wallet, TrendingUp, TrendingDown, CreditCard } from "lucide-react";
-import { useAccounts } from "@/hooks/useAccounts";
+import { useState } from "react";
+import {
+  ChevronLeft, ChevronRight, Wallet, TrendingUp, TrendingDown,
+  Plus, MoreVertical, Pencil, Trash2, ArrowLeftRight,
+} from "lucide-react";
+import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useSummary } from "@/hooks/useAnalytics";
 import { useTransactions } from "@/hooks/useTransactions";
-import { useUIStore } from "@/store/uiStore";
+import { useUIStore, type EditTxData } from "@/store/uiStore";
 import { formatCurrency } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils/cn";
-import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const BANK_COLORS: Record<string, string> = {
+  BBVA: "#00A1E0", Santander: "#EC0000", CaixaBank: "#F5A623", ING: "#FF6200",
+  Sabadell: "#007DC5", Bankinter: "#FF6B35", Otro: "#6366f1",
+};
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
-  checking: "Corriente",
-  savings: "Ahorro",
-  credit: "Crédito",
-  epsv: "EPSV",
-  investment: "Inversión",
-};
-
-const ACCOUNT_TYPE_COLORS: Record<string, string> = {
-  checking: "bg-blue-400/20 text-blue-300",
-  savings: "bg-emerald-400/20 text-emerald-300",
-  credit: "bg-red-400/20 text-red-300",
-  epsv: "bg-violet-400/20 text-violet-300",
-  investment: "bg-amber-400/20 text-amber-300",
-};
-
-const ACCOUNT_BORDER_COLORS: Record<string, string> = {
-  checking: "border-l-blue-400",
-  savings: "border-l-emerald-400",
-  credit: "border-l-red-400",
-  epsv: "border-l-violet-400",
-  investment: "border-l-amber-400",
+  checking: "Corriente", savings: "Ahorro", credit: "Crédito",
+  epsv: "EPSV", investment: "Inversión",
 };
 
 function monthLabel(ym: string) {
@@ -44,46 +39,40 @@ function addMonth(ym: string, delta: number) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-export default function DashboardPage() {
-  const { selectedMonth, setSelectedMonth } = useUIStore();
-  const { data: accounts = [] } = useAccounts();
+export default function InicioPage() {
+  const { selectedMonth, setSelectedMonth, setEditTx } = useUIStore();
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
   const { data: summary } = useSummary();
-  const { data: txData } = useTransactions({ limit: 6 });
+  const { data: txData } = useTransactions({ limit: 8 });
 
-  const totalAssets = accounts.reduce((s, a) => s + a.balance, 0);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editAccount, setEditAccount] = useState<{ id: string; name: string; bank: string; type: string; includeInNetWorth: boolean } | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const deleteAccount = useDeleteAccount();
+
+  const totalAssets = accounts.filter(a => a.includeInNetWorth !== false).reduce((s, a) => s + a.balance, 0);
   const recentTxs = txData?.data ?? [];
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Dark gradient header */}
+
+      {/* ── Gradient header ── */}
       <div className="bg-gradient-to-br from-slate-900 via-primary/20 to-slate-900 px-5 pt-12 pb-6 space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-foreground">Inicio</h1>
-          {/* Month selector */}
           <div className="flex items-center gap-1 bg-white/10 rounded-full px-1 py-0.5">
-            <button
-              onClick={() => setSelectedMonth(addMonth(selectedMonth, -1))}
-              className="flex items-center justify-center h-7 w-7 rounded-full hover:bg-white/10 transition-colors"
-              aria-label="Mes anterior"
-            >
+            <button onClick={() => setSelectedMonth(addMonth(selectedMonth, -1))} className="flex items-center justify-center h-7 w-7 rounded-full hover:bg-white/10 transition-colors">
               <ChevronLeft className="h-4 w-4 text-white/70" />
             </button>
-            <span className="text-xs font-medium text-white/90 capitalize min-w-[110px] text-center">
-              {monthLabel(selectedMonth)}
-            </span>
-            <button
-              onClick={() => setSelectedMonth(addMonth(selectedMonth, 1))}
-              className="flex items-center justify-center h-7 w-7 rounded-full hover:bg-white/10 transition-colors"
-              aria-label="Mes siguiente"
-            >
+            <span className="text-xs font-medium text-white/90 capitalize min-w-[110px] text-center">{monthLabel(selectedMonth)}</span>
+            <button onClick={() => setSelectedMonth(addMonth(selectedMonth, 1))} className="flex items-center justify-center h-7 w-7 rounded-full hover:bg-white/10 transition-colors">
               <ChevronRight className="h-4 w-4 text-white/70" />
             </button>
           </div>
         </div>
 
-        {/* 3 stat cards */}
+        {/* Stat cards */}
         <div className="grid grid-cols-3 gap-2">
-          {/* Patrimonio */}
           <div className="rounded-xl bg-white/10 backdrop-blur p-3 space-y-1">
             <div className="flex items-center gap-1.5">
               <Wallet className="h-3.5 w-3.5 text-white/60" />
@@ -91,7 +80,6 @@ export default function DashboardPage() {
             </div>
             <p className="text-base font-bold text-white leading-tight">{formatCurrency(totalAssets)}</p>
           </div>
-          {/* Ingresos */}
           <div className="rounded-xl bg-emerald-500/15 backdrop-blur p-3 space-y-1">
             <div className="flex items-center gap-1.5">
               <TrendingUp className="h-3.5 w-3.5 text-emerald-400" />
@@ -99,7 +87,6 @@ export default function DashboardPage() {
             </div>
             <p className="text-base font-bold text-emerald-300 leading-tight">{formatCurrency(summary?.monthlyIncome ?? 0)}</p>
           </div>
-          {/* Gastos */}
           <div className="rounded-xl bg-red-500/15 backdrop-blur p-3 space-y-1">
             <div className="flex items-center gap-1.5">
               <TrendingDown className="h-3.5 w-3.5 text-red-400" />
@@ -111,109 +98,93 @@ export default function DashboardPage() {
       </div>
 
       <div className="px-4 py-4 space-y-6">
-        {/* Accounts section */}
+
+        {/* ── Account list ── */}
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-foreground">Mis cuentas</h2>
-            <Link href="/accounts" className="text-xs text-primary font-medium hover:underline">
-              Ver todas
-            </Link>
+            <button onClick={() => setCreateOpen(true)} className="flex items-center gap-1 text-xs text-primary font-medium hover:underline">
+              <Plus className="h-3.5 w-3.5" /> Añadir
+            </button>
           </div>
           <div className="space-y-2">
-            {accounts.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-6 text-center">
-                <CreditCard className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">No hay cuentas aún</p>
-              </div>
-            ) : (
-              accounts.map(account => (
-                <div
-                  key={account.id}
-                  className={cn(
-                    "flex items-center justify-between rounded-xl border border-border bg-card p-4 border-l-4",
-                    ACCOUNT_BORDER_COLORS[account.type] ?? "border-l-muted"
-                  )}
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-sm truncate">{account.name}</p>
-                      <span className={cn(
-                        "shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                        ACCOUNT_TYPE_COLORS[account.type] ?? "bg-muted text-muted-foreground"
-                      )}>
-                        {ACCOUNT_TYPE_LABELS[account.type] ?? account.type}
-                      </span>
+            {accountsLoading
+              ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)
+              : accounts.length === 0
+                ? (
+                  <button onClick={() => setCreateOpen(true)} className="w-full flex items-center gap-3 rounded-xl border-2 border-dashed border-border px-4 py-4 text-muted-foreground hover:border-primary/50 hover:text-foreground transition-all">
+                    <Plus className="h-5 w-5 shrink-0" />
+                    <span className="text-sm font-medium">Añadir primera cuenta</span>
+                  </button>
+                )
+                : accounts.map((acc) => (
+                  <div key={acc.id} className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+                    <span className="h-3 w-3 rounded-full shrink-0" style={{ background: BANK_COLORS[acc.bank] ?? "#6366f1" }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-semibold truncate">{acc.name}</p>
+                        {!acc.includeInNetWorth && (
+                          <span className="shrink-0 text-[9px] font-medium text-muted-foreground border border-border rounded-full px-1.5 py-px">excluida</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">{acc.bank} · {ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}</p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{account.bank}</p>
+                    <p className={cn("text-base font-bold tabular-nums shrink-0", acc.balance >= 0 ? "text-foreground" : "text-red-400")}>
+                      {formatCurrency(acc.balance)}
+                    </p>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="rounded p-1 hover:bg-muted transition-colors shrink-0">
+                          <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-36">
+                        <DropdownMenuItem onClick={() => setEditAccount({ id: acc.id, name: acc.name, bank: acc.bank, type: acc.type, includeInNetWorth: acc.includeInNetWorth })}>
+                          <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-red-400 focus:text-red-400" onClick={() => setDeleteId(acc.id)}>
+                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Eliminar
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
-                  <p className={cn(
-                    "text-base font-bold shrink-0 ml-3",
-                    account.balance >= 0 ? "text-foreground" : "text-red-400"
-                  )}>
-                    {formatCurrency(account.balance)}
-                  </p>
-                </div>
-              ))
-            )}
+                ))}
           </div>
         </section>
 
-        {/* Recent transactions section */}
+        {/* ── Recent transactions ── */}
         <section>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-sm font-semibold text-foreground">Últimos movimientos</h2>
-            <Link href="/accounts" className="text-xs text-primary font-medium hover:underline">
-              Ver todos
-            </Link>
+            <a href="/accounts" className="text-xs text-primary font-medium hover:underline">Ver todos</a>
           </div>
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             {recentTxs.length === 0 ? (
-              <div className="p-6 text-center text-sm text-muted-foreground">
-                Sin movimientos recientes
-              </div>
+              <div className="p-6 text-center text-sm text-muted-foreground">Sin movimientos recientes</div>
             ) : (
               recentTxs.map((tx, i) => (
                 <div
                   key={tx.id}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3",
-                    i < recentTxs.length - 1 && "border-b border-border"
-                  )}
+                  className={cn("flex items-center gap-3 px-4 py-3 hover:bg-muted/20 transition-colors cursor-pointer", i < recentTxs.length - 1 && "border-b border-border")}
+                  onClick={() => setEditTx({ id: tx.id, amount: tx.amount, description: tx.description, date: tx.date, accountId: tx.accountId, category: tx.category ?? null, subcategory: tx.subcategory ?? null, notes: tx.notes ?? null, isTransfer: tx.isTransfer ?? false } as EditTxData)}
                 >
-                  {/* Amount indicator */}
-                  <div className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
-                    tx.amount >= 0 ? "bg-emerald-400/10" : "bg-red-400/10"
-                  )}>
-                    {tx.amount >= 0
-                      ? <TrendingUp className="h-4 w-4 text-emerald-400" />
-                      : <TrendingDown className="h-4 w-4 text-red-400" />
-                    }
+                  <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", tx.isTransfer ? "bg-blue-400/10" : tx.amount >= 0 ? "bg-emerald-400/10" : "bg-red-400/10")}>
+                    {tx.isTransfer ? <ArrowLeftRight className="h-4 w-4 text-blue-400" /> : tx.amount >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-400" /> : <TrendingDown className="h-4 w-4 text-red-400" />}
                   </div>
-
-                  {/* Description + meta */}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{tx.description}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="text-[10px] text-muted-foreground">
-                        {new Date(tx.date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
-                      </span>
+                      <span className="text-[10px] text-muted-foreground">{new Date(tx.date).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}</span>
                       {tx.category && (
                         <>
                           <span className="text-[10px] text-muted-foreground">·</span>
-                          <span className="rounded-full bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">
-                            {tx.category}
-                          </span>
+                          <span className="rounded-full bg-muted px-1.5 py-px text-[10px] font-medium text-muted-foreground truncate max-w-[100px]">{tx.category}</span>
                         </>
                       )}
                     </div>
                   </div>
-
-                  {/* Amount */}
-                  <p className={cn(
-                    "text-sm font-semibold shrink-0",
-                    tx.amount >= 0 ? "text-emerald-400" : "text-red-400"
-                  )}>
+                  <p className={cn("text-sm font-semibold shrink-0", tx.amount >= 0 ? "text-emerald-400" : "text-red-400")}>
                     {tx.amount >= 0 ? "+" : ""}{formatCurrency(tx.amount)}
                   </p>
                 </div>
@@ -222,6 +193,149 @@ export default function DashboardPage() {
           </div>
         </section>
       </div>
+
+      {/* ── Dialogs ── */}
+      <AddAccountDialog open={createOpen} onClose={() => setCreateOpen(false)} />
+      {editAccount && <EditAccountDialog account={editAccount} onClose={() => setEditAccount(null)} />}
+      <Dialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>¿Eliminar cuenta?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Se desactivará y no aparecerá en el inicio. Las transacciones se conservan.</p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteId(null)}>Cancelar</Button>
+            <Button variant="destructive" disabled={deleteAccount.isPending} onClick={async () => {
+              if (deleteId) { await deleteAccount.mutateAsync(deleteId); setDeleteId(null); }
+            }}>{deleteAccount.isPending ? "Eliminando..." : "Eliminar"}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+/* ─── Account dialogs ──────────────────────────────────────────────────── */
+
+function AddAccountDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const createAccount = useCreateAccount();
+  const [form, setForm] = useState({ name: "", type: "checking", bank: "BBVA", currency: "EUR", initialBalance: "", includeInNetWorth: true });
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await createAccount.mutateAsync({ ...form, initialBalance: form.initialBalance ? parseFloat(form.initialBalance) : undefined });
+    onClose();
+    setForm({ name: "", type: "checking", bank: "BBVA", currency: "EUR", initialBalance: "", includeInNetWorth: true });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Nueva Cuenta</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Nombre</label>
+            <Input placeholder="Ej: BBVA Cuenta Corriente" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Banco</label>
+              <Select value={form.bank} onValueChange={v => setForm(f => ({ ...f, bank: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["BBVA","Santander","CaixaBank","ING","Sabadell","Bankinter","Otro"].map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Tipo</label>
+              <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="checking">Corriente</SelectItem>
+                  <SelectItem value="savings">Ahorro</SelectItem>
+                  <SelectItem value="credit">Crédito</SelectItem>
+                  <SelectItem value="epsv">EPSV</SelectItem>
+                  <SelectItem value="investment">Inversión</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Saldo inicial (€)</label>
+            <Input type="number" step="0.01" placeholder="0.00" value={form.initialBalance} onChange={e => setForm(f => ({ ...f, initialBalance: e.target.value }))} />
+          </div>
+          <label className="flex items-center gap-3 cursor-pointer select-none rounded-lg border border-border p-3 hover:bg-muted/30 transition-colors">
+            <input type="checkbox" checked={form.includeInNetWorth} onChange={e => setForm(f => ({ ...f, includeInNetWorth: e.target.checked }))} className="h-4 w-4 rounded accent-primary cursor-pointer" />
+            <div>
+              <p className="text-sm font-medium">Incluir en patrimonio neto</p>
+              <p className="text-xs text-muted-foreground">El saldo sumará al cálculo de tu patrimonio</p>
+            </div>
+          </label>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" disabled={createAccount.isPending}>{createAccount.isPending ? "Guardando..." : "Crear cuenta"}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditAccountDialog({ account, onClose }: { account: { id: string; name: string; bank: string; type: string; includeInNetWorth: boolean }; onClose: () => void }) {
+  const updateAccount = useUpdateAccount();
+  const [form, setForm] = useState({ name: account.name, type: account.type, bank: account.bank, includeInNetWorth: account.includeInNetWorth });
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await updateAccount.mutateAsync({ id: account.id, ...form });
+    onClose();
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Editar cuenta</DialogTitle></DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Nombre</label>
+            <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Banco</label>
+              <Select value={form.bank} onValueChange={v => setForm(f => ({ ...f, bank: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["BBVA","Santander","CaixaBank","ING","Sabadell","Bankinter","Otro"].map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Tipo</label>
+              <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="checking">Corriente</SelectItem>
+                  <SelectItem value="savings">Ahorro</SelectItem>
+                  <SelectItem value="credit">Crédito</SelectItem>
+                  <SelectItem value="epsv">EPSV</SelectItem>
+                  <SelectItem value="investment">Inversión</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <label className="flex items-center gap-3 cursor-pointer select-none rounded-lg border border-border p-3 hover:bg-muted/30 transition-colors">
+            <input type="checkbox" checked={form.includeInNetWorth} onChange={e => setForm(f => ({ ...f, includeInNetWorth: e.target.checked }))} className="h-4 w-4 rounded accent-primary cursor-pointer" />
+            <div>
+              <p className="text-sm font-medium">Incluir en patrimonio neto</p>
+              <p className="text-xs text-muted-foreground">El saldo sumará al cálculo de tu patrimonio</p>
+            </div>
+          </label>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
+            <Button type="submit" disabled={updateAccount.isPending}>{updateAccount.isPending ? "Guardando..." : "Guardar cambios"}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

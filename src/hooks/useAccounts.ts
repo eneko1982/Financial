@@ -6,7 +6,7 @@ export function useAccounts() {
     queryFn: async () => {
       const res = await fetch("/api/accounts");
       const json = await res.json();
-      return json.data as Array<{ id: string; name: string; bank: string; type: string; color: string | null; balance: number; currency: string }>;
+      return json.data as Array<{ id: string; name: string; bank: string; type: string; color: string | null; balance: number; currency: string; includeInNetWorth: boolean }>;
     },
   });
 }
