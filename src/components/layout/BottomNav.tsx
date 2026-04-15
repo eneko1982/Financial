@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, ArrowLeftRight, Plus, BarChart2, LayoutGrid } from "lucide-react";
+import { Home, ArrowLeftRight, Plus, TrendingUp, LayoutGrid } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 export function BottomNav({ onAdd }: { onAdd: () => void }) {
@@ -26,7 +26,7 @@ export function BottomNav({ onAdd }: { onAdd: () => void }) {
           <span className="text-[10px] font-medium text-muted-foreground mt-0.5">Añadir</span>
         </div>
 
-        <NavItem href="/expenses" label="Informes" icon={BarChart2} active={isActive("/expenses")} />
+        <NavItem href="/investments" label="Inversiones" icon={TrendingUp} active={isActive("/investments")} />
         <NavItem href="/more" label="Más" icon={LayoutGrid} active={isActive("/more")} />
       </div>
     </nav>

@@ -1,9 +1,17 @@
 "use client";
 import Link from "next/link";
-import { Tag, TrendingUp, Target, Landmark, Bot, ChevronRight } from "lucide-react";
+import { Tag, TrendingUp, Target, Landmark, Bot, ChevronRight, BarChart2 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
 const TILES = [
+  {
+    href: "/expenses",
+    label: "Informes",
+    description: "Análisis de gastos e ingresos por categoría y periodo",
+    icon: BarChart2,
+    color: "text-sky-400",
+    bg: "bg-sky-400/10",
+  },
   {
     href: "/categories",
     label: "Categorías",
@@ -11,14 +19,6 @@ const TILES = [
     icon: Tag,
     color: "text-violet-400",
     bg: "bg-violet-400/10",
-  },
-  {
-    href: "/investments",
-    label: "Inversiones",
-    description: "Seguimiento de tu cartera de inversiones y rentabilidad",
-    icon: TrendingUp,
-    color: "text-emerald-400",
-    bg: "bg-emerald-400/10",
   },
   {
     href: "/savings",
