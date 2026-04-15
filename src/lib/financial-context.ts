@@ -79,7 +79,12 @@ export async function buildFinancialContext(): Promise<FinancialContext> {
   const totalReturn    = calcTotalReturn(portfolioValue, portfolioCost);
 
   const totalAssets = totalBankAssets + portfolioValue;
-  const netWorth    = totalAssets; // no liabilities tracked yet
+
+  // ── Liabilities ────────────────────────────────────────────────────────────
+  const liabilityRecords = await prisma.liability.findMany({ where: { isActive: true } });
+  const totalLiabilities = liabilityRecords.reduce((s, l) => s + l.balance, 0);
+
+  const netWorth = totalAssets - totalLiabilities;
 
   // Previous month net worth for change %
   const prevSnapshot = await prisma.netWorthSnapshot.findFirst({
@@ -205,7 +210,8 @@ export async function buildFinancialContext(): Promise<FinancialContext> {
     netWorth,
     netWorthChange,
     totalAssets,
-    liabilities: 0,
+    liabilities: totalLiabilities,
+    liabilityBreakdown: liabilityRecords.map(l => ({ name: l.name, type: l.type, balance: l.balance })),
     accounts: accountsWithBalance.map((a) => ({
       name: a.name,
       bank: a.bank,

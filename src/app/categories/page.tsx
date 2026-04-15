@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils/cn";
+import { RulesManager } from "@/components/transactions/RulesManager";
 
 const PRESET_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e",
@@ -428,6 +429,10 @@ export default function CategoriesPage() {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      <div className="px-6 pb-6 max-w-7xl mx-auto">
+        <RulesManager />
       </div>
     </div>
   );

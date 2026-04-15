@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { ParsedTransaction } from "@/types/financial";
 import { invalidateFinancialContext } from "@/lib/financial-context";
+import { getActiveRules, applyRules } from "@/lib/transaction-rules";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -11,18 +12,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: null, error: "Datos requeridos" }, { status: 400 });
   }
 
-  // Bulk insert con skipDuplicates (PostgreSQL) — mucho más rápido que insertar una a una
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const result = await (prisma.transaction.createMany as any)({
-    data: transactions.map((tx) => ({
+  // Apply user-defined categorization rules (override AI-suggested categories)
+  const rules = await getActiveRules();
+  const enriched = transactions.map((tx) => {
+    const ruleMatch = rules.length > 0 ? applyRules(tx.description, rules) : null;
+    return {
       accountId,
       date: new Date(tx.date),
       description: tx.description,
       amount: tx.amount,
       balance: tx.balance ?? null,
-      category: tx.suggestedCategory ?? "Sin categoría",
+      category: ruleMatch?.category ?? tx.suggestedCategory ?? "Sin categoría",
+      subcategory: ruleMatch?.subcategory ?? null,
       importHash: tx.importHash,
-    })),
+    };
+  });
+
+  // Bulk insert con skipDuplicates — mucho más rápido que insertar una a una
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await (prisma.transaction.createMany as any)({
+    data: enriched,
     skipDuplicates: true,
   }) as { count: number };
   const count = result.count;
@@ -43,13 +52,17 @@ export async function POST(req: NextRequest) {
     0
   );
   const totalAssets = totalBank + portfolioValue;
+  const liabilityRecords = await prisma.liability.findMany({ where: { isActive: true } });
+  const totalLiabilities = liabilityRecords.reduce((s, l) => s + l.balance, 0);
+  const netWorthReal = totalAssets - totalLiabilities;
 
   await prisma.netWorthSnapshot.create({
     data: {
       date: new Date(),
       totalAssets,
-      netWorth: totalAssets,
-      breakdown: JSON.stringify({ bank: totalBank, portfolio: portfolioValue }),
+      liabilities: totalLiabilities,
+      netWorth: netWorthReal,
+      breakdown: JSON.stringify({ bank: totalBank, portfolio: portfolioValue, liabilities: totalLiabilities }),
     },
   });
 

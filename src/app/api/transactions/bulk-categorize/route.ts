@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
 
   const result = await prisma.transaction.updateMany({
     where: {
-      description: { contains: descriptionPattern, mode: "insensitive" },
+      description: { contains: descriptionPattern },
       editedByUser: false, // never overwrite manually-edited transactions
     },
     data: {

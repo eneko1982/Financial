@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, CreditCard, PieChart, TrendingUp,
-  Target, Bot, Upload, X, Menu, Tag,
+  Target, Bot, Upload, X, Menu, Tag, Landmark,
 } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { href: "/categories", label: "Categorías", icon: Tag },
   { href: "/investments", label: "Inversiones", icon: TrendingUp },
   { href: "/savings", label: "Objetivos", icon: Target },
+  { href: "/liabilities", label: "Deudas", icon: Landmark },
   { href: "/advisor", label: "Asesor IA", icon: Bot },
 ];
 

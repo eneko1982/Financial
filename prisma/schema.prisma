@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -177,4 +177,33 @@ model NetWorthSnapshot {
   createdAt   DateTime @default(now())
 
   @@index([date])
+}
+
+model Liability {
+  id             String    @id @default(cuid())
+  name           String
+  type           String    // "mortgage" | "loan" | "credit_card" | "other"
+  balance        Float
+  interestRate   Float?
+  monthlyPayment Float?
+  lender         String?
+  startDate      DateTime?
+  endDate        DateTime?
+  notes          String?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model TransactionRule {
+  id          String   @id @default(cuid())
+  name        String
+  pattern     String
+  matchType   String   @default("contains") // "contains" | "startsWith" | "endsWith" | "regex"
+  category    String
+  subcategory String?
+  priority    Int      @default(0)           // menor número = mayor prioridad
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

@@ -1,5 +1,5 @@
 "use client";
-import { Wallet, PiggyBank, TrendingUp, Receipt, Bot, Upload } from "lucide-react";
+import { Wallet, PiggyBank, TrendingUp, Receipt, Bot, Upload, Landmark } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { KPICard } from "@/components/dashboard/KPICard";
 import { NetWorthChart } from "@/components/dashboard/NetWorthChart";
@@ -7,6 +7,7 @@ import { CashFlowChart } from "@/components/dashboard/CashFlowChart";
 import { RecentTransactions } from "@/components/dashboard/RecentTransactions";
 import { useSummary, useNetWorth, useCashFlow } from "@/hooks/useAnalytics";
 import { useTransactions } from "@/hooks/useTransactions";
+import { useLiabilities } from "@/hooks/useLiabilities";
 import { useUIStore } from "@/store/uiStore";
 import { formatCurrency, formatPercent } from "@/lib/utils/currency";
 import { currentMonthLabel } from "@/lib/utils/dates";
@@ -18,7 +19,10 @@ export default function DashboardPage() {
   const { data: netWorthData = [] } = useNetWorth();
   const { data: cashFlow = [] } = useCashFlow();
   const { data: txData } = useTransactions({ limit: 10 });
+  const { data: liabilityData = [] } = useLiabilities();
   const { setImportOpen } = useUIStore();
+
+  const totalLiabilities = liabilityData.reduce((s, l) => s + l.balance, 0);
 
   const hasData = (txData?.meta?.total ?? 0) > 0;
 
@@ -44,13 +48,19 @@ export default function DashboardPage() {
         )}
 
         {/* KPI Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
           <KPICard
             title="Patrimonio Neto"
             value={formatCurrency(summary?.netWorth ?? 0)}
             change={summary?.netWorthChange}
             changeLabel="vs mes anterior"
             icon={<Wallet className="h-4 w-4 text-muted-foreground" />}
+          />
+          <KPICard
+            title="Pasivos"
+            value={formatCurrency(totalLiabilities)}
+            icon={<Landmark className="h-4 w-4 text-muted-foreground" />}
+            accent={totalLiabilities > 0 ? "loss" : "neutral"}
           />
           <KPICard
             title="Tasa de Ahorro"

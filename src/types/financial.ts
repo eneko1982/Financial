@@ -65,6 +65,7 @@ export interface FinancialContext {
   netWorthChange: number;
   totalAssets: number;
   liabilities: number;
+  liabilityBreakdown?: { name: string; type: string; balance: number }[];
   accounts: { name: string; bank: string; balance: number; type: string }[];
   currentMonth: string;
   income: number;
