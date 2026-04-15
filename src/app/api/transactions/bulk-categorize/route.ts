@@ -14,7 +14,8 @@ export async function POST(req: NextRequest) {
 
   const result = await prisma.transaction.updateMany({
     where: {
-      description: { contains: descriptionPattern, mode: "insensitive" },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      description: { contains: descriptionPattern, mode: "insensitive" } as any,
       editedByUser: false, // never overwrite manually-edited transactions
     },
     data: {

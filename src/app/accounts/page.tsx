@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
-import { Plus, Search, Filter, MoreVertical, Pencil, Trash2, Download } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, Search, Filter, MoreVertical, Pencil, Trash2, Download, Tag } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useUserCategories } from "@/hooks/useUserCategories";
+import { useQueryClient } from "@tanstack/react-query";
 import { useUIStore } from "@/store/uiStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,14 @@ export default function AccountsPage() {
   const [page, setPage] = useState(1);
   const [onlyUnedited, setOnlyUnedited] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectAllFiltered, setSelectAllFiltered] = useState(false);
+  const [bulkCategory, setBulkCategory] = useState("");
+  const [bulkSubcategory, setBulkSubcategory] = useState("");
+  const [bulkApplying, setBulkApplying] = useState(false);
+  const qc = useQueryClient();
   const [editAccount, setEditAccount] = useState<{ id: string; name: string; bank: string; type: string } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const deleteAccount = useDeleteAccount();
@@ -54,6 +63,86 @@ export default function AccountsPage() {
   const subcategoryOptions = selectedCategoryObj
     ? selectedCategoryObj.children
     : userCategories.flatMap((c) => c.children);
+
+  // Bulk selection helpers
+  const pageRows = txData?.data ?? [];
+  const pageIds = pageRows.map((t) => t.id);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+  const somePageSelected = pageIds.some((id) => selectedIds.has(id));
+  const totalResults = txData?.meta?.total ?? 0;
+
+  // Reset selection when filters or page changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+    setSelectAllFiltered(false);
+  }, [selectedAccount, search, category, subcategory, onlyUnedited, page]);
+
+  function toggleRow(id: string) {
+    setSelectAllFiltered(false);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllPage() {
+    setSelectAllFiltered(false);
+    if (allPageSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        pageIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => new Set(Array.from(prev).concat(pageIds)));
+    }
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set());
+    setSelectAllFiltered(false);
+    setBulkCategory("");
+    setBulkSubcategory("");
+  }
+
+  const bulkCatObj = userCategories.find((c) => c.name === bulkCategory);
+  const bulkSubcategoryOptions = bulkCatObj?.children ?? [];
+
+  async function applyBulk() {
+    if (!bulkCategory) return;
+    setBulkApplying(true);
+    try {
+      const body = selectAllFiltered
+        ? {
+            filter: {
+              accountId: selectedAccount || undefined,
+              search: search || undefined,
+              category: category || undefined,
+              subcategory: subcategory || undefined,
+              editedByUser: onlyUnedited ? false : undefined,
+            },
+            category: bulkCategory,
+            subcategory: bulkSubcategory || null,
+          }
+        : {
+            ids: Array.from(selectedIds),
+            category: bulkCategory,
+            subcategory: bulkSubcategory || null,
+          };
+
+      await fetch("/api/transactions/bulk-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+      qc.invalidateQueries({ queryKey: ["analytics"] });
+      clearSelection();
+    } finally {
+      setBulkApplying(false);
+    }
+  }
 
   return (
     <div>
@@ -174,12 +263,48 @@ export default function AccountsPage() {
           </Button>
         </div>
 
+        {/* "Select all filtered" notice */}
+        {allPageSelected && !selectAllFiltered && totalResults > pageIds.length && (
+          <div className="flex items-center gap-3 rounded-lg bg-primary/10 border border-primary/20 px-4 py-2.5 text-sm">
+            <span className="text-muted-foreground">
+              Seleccionados <strong className="text-foreground">{selectedIds.size}</strong> de esta página.
+            </span>
+            <button
+              onClick={() => setSelectAllFiltered(true)}
+              className="text-primary font-medium hover:underline"
+            >
+              Seleccionar los {totalResults} resultados del filtro actual
+            </button>
+          </div>
+        )}
+        {selectAllFiltered && (
+          <div className="flex items-center gap-3 rounded-lg bg-primary/10 border border-primary/20 px-4 py-2.5 text-sm">
+            <span>
+              <strong className="text-foreground">{totalResults} transacciones</strong>{" "}
+              <span className="text-muted-foreground">seleccionadas (todos los resultados del filtro).</span>
+            </span>
+            <button onClick={() => setSelectAllFiltered(false)} className="text-muted-foreground hover:text-foreground underline text-xs">
+              Deshacer
+            </button>
+          </div>
+        )}
+
         {/* Transactions table */}
         <div className="rounded-xl border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 border-b border-border">
                 <tr>
+                  <th className="px-3 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={allPageSelected}
+                      ref={(el) => { if (el) el.indeterminate = somePageSelected && !allPageSelected; }}
+                      onChange={toggleAllPage}
+                      className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                      title="Seleccionar página"
+                    />
+                  </th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Fecha</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Descripción</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Categoría</th>
@@ -191,51 +316,117 @@ export default function AccountsPage() {
                 {txLoading
                   ? Array.from({ length: 8 }).map((_, i) => (
                       <tr key={i} className="border-t border-border">
-                        {Array.from({ length: 5 }).map((_, j) => (
+                        {Array.from({ length: 6 }).map((_, j) => (
                           <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
                         ))}
                       </tr>
                     ))
-                  : (txData?.data ?? []).map((tx) => (
-                  <tr key={tx.id} className="border-t border-border hover:bg-muted/20 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{new Date(tx.date).toLocaleDateString("es-ES")}</td>
-                    <td className="px-4 py-3 max-w-[280px]">
-                      <p className="truncate font-medium">{tx.description}</p>
-                      {tx.notes && <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{tx.notes}</p>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <CategoryEditor
-                        transactionId={tx.id}
-                        currentCategory={tx.category ?? null}
-                        currentSubcategory={tx.subcategory ?? null}
-                        currentNotes={tx.notes ?? null}
-                        editedByUser={tx.editedByUser}
-                        description={tx.description}
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{tx.account?.name}</td>
-                    <td className={cn("px-4 py-3 text-right font-mono font-semibold tabular-nums", tx.amount >= 0 ? "text-emerald-400" : "text-foreground")}>
-                      {tx.amount >= 0 ? "+" : ""}{formatCurrency(tx.amount)}
-                    </td>
-                  </tr>
-                ))}
-                {!txLoading && (txData?.data ?? []).length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">No hay transacciones</td></tr>
+                  : pageRows.map((tx) => {
+                      const isSelected = selectedIds.has(tx.id);
+                      return (
+                        <tr
+                          key={tx.id}
+                          className={cn(
+                            "border-t border-border hover:bg-muted/20 transition-colors",
+                            isSelected && "bg-primary/5"
+                          )}
+                        >
+                          <td className="px-3 py-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleRow(tx.id)}
+                              className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+                            />
+                          </td>
+                          <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{new Date(tx.date).toLocaleDateString("es-ES")}</td>
+                          <td className="px-4 py-3 max-w-[280px]">
+                            <p className="truncate font-medium">{tx.description}</p>
+                            {tx.notes && <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{tx.notes}</p>}
+                          </td>
+                          <td className="px-4 py-3">
+                            <CategoryEditor
+                              transactionId={tx.id}
+                              currentCategory={tx.category ?? null}
+                              currentSubcategory={tx.subcategory ?? null}
+                              currentNotes={tx.notes ?? null}
+                              editedByUser={tx.editedByUser}
+                              description={tx.description}
+                            />
+                          </td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">{tx.account?.name}</td>
+                          <td className={cn("px-4 py-3 text-right font-mono font-semibold tabular-nums", tx.amount >= 0 ? "text-emerald-400" : "text-foreground")}>
+                            {tx.amount >= 0 ? "+" : ""}{formatCurrency(tx.amount)}
+                          </td>
+                        </tr>
+                      );
+                  })}
+                {!txLoading && pageRows.length === 0 && (
+                  <tr><td colSpan={6} className="px-4 py-12 text-center text-sm text-muted-foreground">No hay transacciones</td></tr>
                 )}
               </tbody>
             </table>
           </div>
           {/* Pagination */}
-          {(txData?.meta?.total ?? 0) > 30 && (
+          {totalResults > 30 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border text-sm text-muted-foreground">
-              <span>{txData?.meta?.total} transacciones</span>
+              <span>{totalResults} transacciones</span>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Anterior</Button>
-                <Button variant="outline" size="sm" disabled={page * 30 >= (txData?.meta?.total ?? 0)} onClick={() => setPage(p => p + 1)}>Siguiente</Button>
+                <Button variant="outline" size="sm" disabled={page * 30 >= totalResults} onClick={() => setPage(p => p + 1)}>Siguiente</Button>
               </div>
             </div>
           )}
         </div>
+
+        {/* Bulk action bar — slides in when rows are selected */}
+        {(selectedIds.size > 0 || selectAllFiltered) && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl border border-border bg-card shadow-2xl px-5 py-3.5 text-sm">
+            <span className="font-semibold text-foreground whitespace-nowrap">
+              {selectAllFiltered ? totalResults : selectedIds.size} seleccionados
+            </span>
+            <div className="w-px h-5 bg-border" />
+            <Select value={bulkCategory || "none"} onValueChange={(v) => { setBulkCategory(v === "none" ? "" : v); setBulkSubcategory(""); }}>
+              <SelectTrigger className="h-8 w-44 text-xs">
+                <Tag className="h-3 w-3 mr-1.5 text-muted-foreground" />
+                <SelectValue placeholder="Categoría…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Seleccionar categoría…</SelectItem>
+                {userCategories.map((c) => (
+                  <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {bulkSubcategoryOptions.length > 0 && (
+              <Select value={bulkSubcategory || "none"} onValueChange={(v) => setBulkSubcategory(v === "none" ? "" : v)}>
+                <SelectTrigger className="h-8 w-40 text-xs">
+                  <SelectValue placeholder="Subcategoría…" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin subcategoría</SelectItem>
+                  {bulkSubcategoryOptions.map((s) => (
+                    <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button
+              size="sm"
+              disabled={!bulkCategory || bulkApplying}
+              onClick={applyBulk}
+              className="h-8 px-4"
+            >
+              {bulkApplying ? "Aplicando…" : "Aplicar"}
+            </Button>
+            <button
+              onClick={clearSelection}
+              className="text-muted-foreground hover:text-foreground transition-colors text-xs"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
 
       </div>
       <AddAccountDialog open={createOpen} onClose={() => setCreateOpen(false)} />
