@@ -34,28 +34,29 @@ export async function buildFinancialContext(): Promise<FinancialContext> {
   const accounts = await prisma.account.findMany({ where: { isActive: true } });
   const accountIds = accounts.map(a => a.id);
 
-  const snapshots = accountIds.length > 0
-    ? await prisma.accountBalance.findMany({
-        where: { accountId: { in: accountIds } },
-        orderBy: { date: "desc" },
-        distinct: ["accountId"],
-        select: { accountId: true, balance: true },
-      })
-    : [];
-  const snapshotMap = new Map(snapshots.map(s => [s.accountId, s.balance]));
+  // Balance resolution: same date-aware logic as accounts API.
+  // Use whichever source is more recent (snapshot vs tx.balance); sum as last resort.
+  const [snapshots, lastTxBalances] = accountIds.length > 0
+    ? await Promise.all([
+        prisma.accountBalance.findMany({
+          where: { accountId: { in: accountIds } },
+          orderBy: { date: "desc" },
+          distinct: ["accountId"],
+          select: { accountId: true, balance: true, date: true },
+        }),
+        prisma.transaction.findMany({
+          where: { accountId: { in: accountIds }, balance: { not: null } },
+          orderBy: { date: "desc" },
+          distinct: ["accountId"],
+          select: { accountId: true, balance: true, date: true },
+        }),
+      ])
+    : [[], []];
 
-  const needsBalanceTx = accountIds.filter(id => !snapshotMap.has(id));
-  const lastTxBalances = needsBalanceTx.length > 0
-    ? await prisma.transaction.findMany({
-        where: { accountId: { in: needsBalanceTx }, balance: { not: null } },
-        orderBy: { date: "desc" },
-        distinct: ["accountId"],
-        select: { accountId: true, balance: true },
-      })
-    : [];
-  const lastTxBalanceMap = new Map(lastTxBalances.map(t => [t.accountId, t.balance as number]));
+  const snapshotMap  = new Map(snapshots.map(s => [s.accountId, s]));
+  const lastTxBalMap = new Map(lastTxBalances.map(t => [t.accountId, t]));
 
-  const needsSum = needsBalanceTx.filter(id => !lastTxBalanceMap.has(id));
+  const needsSum = accountIds.filter(id => !snapshotMap.has(id) && !lastTxBalMap.has(id));
   const txSums = needsSum.length > 0
     ? await prisma.transaction.groupBy({
         by: ["accountId"],
@@ -65,10 +66,21 @@ export async function buildFinancialContext(): Promise<FinancialContext> {
     : [];
   const txSumMap = new Map(txSums.map(s => [s.accountId, s._sum.amount ?? 0]));
 
-  const accountsWithBalance = accounts.map(acc => ({
-    ...acc,
-    balance: snapshotMap.get(acc.id) ?? lastTxBalanceMap.get(acc.id) ?? txSumMap.get(acc.id) ?? 0,
-  }));
+  const accountsWithBalance = accounts.map(acc => {
+    const snap = snapshotMap.get(acc.id);
+    const tx   = lastTxBalMap.get(acc.id);
+    let balance: number;
+    if (snap && tx) {
+      balance = tx.date >= snap.date ? (tx.balance as number) : snap.balance;
+    } else if (tx) {
+      balance = tx.balance as number;
+    } else if (snap) {
+      balance = snap.balance;
+    } else {
+      balance = txSumMap.get(acc.id) ?? 0;
+    }
+    return { ...acc, balance };
+  });
   const totalBankAssets = accountsWithBalance.reduce((s, a) => s + a.balance, 0);
 
   // ── Investment portfolio ────────────────────────────────────────────────────

@@ -21,29 +21,32 @@ export async function GET() {
 
   const accountIds = accounts.map(a => a.id);
 
-  // 1. Latest manual balance snapshot per account (bulk query)
-  const snapshots = await prisma.accountBalance.findMany({
-    where: { accountId: { in: accountIds } },
-    orderBy: { date: "desc" },
-    distinct: ["accountId"],
-    select: { accountId: true, balance: true },
-  });
-  const snapshotMap = new Map(snapshots.map(s => [s.accountId, s.balance]));
+  // Balance resolution (date-aware, 3 sources):
+  // 1. AccountBalance snapshot  vs  latest tx.balance — use whichever has the MORE RECENT date.
+  //    This fixes the bug where an old initial-balance snapshot would override imported transactions.
+  // 2. If only one source exists, use it.
+  // 3. If neither has a balance figure, fall back to summing transaction amounts.
 
-  // 2. Latest transaction with balance field, for accounts missing a snapshot
-  const needsBalanceTx = accountIds.filter(id => !snapshotMap.has(id));
-  const lastTxBalances = needsBalanceTx.length > 0
-    ? await prisma.transaction.findMany({
-        where: { accountId: { in: needsBalanceTx }, balance: { not: null } },
-        orderBy: { date: "desc" },
-        distinct: ["accountId"],
-        select: { accountId: true, balance: true },
-      })
-    : [];
-  const lastTxBalanceMap = new Map(lastTxBalances.map(t => [t.accountId, t.balance as number]));
+  const [snapshots, lastTxBalances] = await Promise.all([
+    prisma.accountBalance.findMany({
+      where: { accountId: { in: accountIds } },
+      orderBy: { date: "desc" },
+      distinct: ["accountId"],
+      select: { accountId: true, balance: true, date: true },
+    }),
+    prisma.transaction.findMany({
+      where: { accountId: { in: accountIds }, balance: { not: null } },
+      orderBy: { date: "desc" },
+      distinct: ["accountId"],
+      select: { accountId: true, balance: true, date: true },
+    }),
+  ]);
 
-  // 3. Sum of transactions for accounts with neither source
-  const needsSum = needsBalanceTx.filter(id => !lastTxBalanceMap.has(id));
+  const snapshotMap  = new Map(snapshots.map(s => [s.accountId, s]));
+  const lastTxBalMap = new Map(lastTxBalances.map(t => [t.accountId, t]));
+
+  // Sum of amounts only for accounts with no balance data from either source
+  const needsSum = accountIds.filter(id => !snapshotMap.has(id) && !lastTxBalMap.has(id));
   const txSums = needsSum.length > 0
     ? await prisma.transaction.groupBy({
         by: ["accountId"],
@@ -53,10 +56,23 @@ export async function GET() {
     : [];
   const txSumMap = new Map(txSums.map(s => [s.accountId, s._sum.amount ?? 0]));
 
-  const withBalance = accounts.map(acc => ({
-    ...acc,
-    balance: snapshotMap.get(acc.id) ?? lastTxBalanceMap.get(acc.id) ?? txSumMap.get(acc.id) ?? 0,
-  }));
+  const withBalance = accounts.map(acc => {
+    const snap = snapshotMap.get(acc.id);
+    const tx   = lastTxBalMap.get(acc.id);
+    let balance: number;
+    if (snap && tx) {
+      // Both exist — prefer the one with the more recent date.
+      // On a tie, transaction balance wins (bank data is authoritative).
+      balance = tx.date >= snap.date ? (tx.balance as number) : snap.balance;
+    } else if (tx) {
+      balance = tx.balance as number;
+    } else if (snap) {
+      balance = snap.balance;
+    } else {
+      balance = txSumMap.get(acc.id) ?? 0;
+    }
+    return { ...acc, balance };
+  });
 
   return NextResponse.json({ data: withBalance, error: null });
 }

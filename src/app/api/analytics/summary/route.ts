@@ -10,38 +10,58 @@ export async function GET() {
   const prevStart = startOfMonth(subMonths(now, 1));
   const prevEnd = endOfMonth(subMonths(now, 1));
 
-  // ── 1. Bank balances ────────────────────────────────────────────────────────
-  // Priority: 1) manual AccountBalance snapshot, 2) last tx.balance (Disponible/Saldo),
-  // 3) sum of amounts. This is identical to /api/accounts.
+  // ── 1. Bank balances (date-aware: use whichever source is more recent) ────────
   const accounts = await prisma.account.findMany({ where: { isActive: true } });
+  const accountIds = accounts.map(a => a.id);
+
+  const [snapshots, lastTxBals, positions, liabilityRecords] = await Promise.all([
+    accountIds.length > 0 ? prisma.accountBalance.findMany({
+      where: { accountId: { in: accountIds } },
+      orderBy: { date: "desc" },
+      distinct: ["accountId"],
+      select: { accountId: true, balance: true, date: true },
+    }) : Promise.resolve([]),
+    accountIds.length > 0 ? prisma.transaction.findMany({
+      where: { accountId: { in: accountIds }, balance: { not: null } },
+      orderBy: { date: "desc" },
+      distinct: ["accountId"],
+      select: { accountId: true, balance: true, date: true },
+    }) : Promise.resolve([]),
+    prisma.investmentPosition.findMany(),
+    prisma.liability.findMany({ where: { isActive: true } }),
+  ]);
+
+  const snapshotMap = new Map(snapshots.map(s => [s.accountId, s]));
+  const txBalMap    = new Map(lastTxBals.map(t => [t.accountId, t]));
+
+  const needsSum = accountIds.filter(id => !snapshotMap.has(id) && !txBalMap.has(id));
+  const txSums = needsSum.length > 0
+    ? await prisma.transaction.groupBy({ by: ["accountId"], where: { accountId: { in: needsSum } }, _sum: { amount: true } })
+    : [];
+  const txSumMap = new Map(txSums.map(s => [s.accountId, s._sum.amount ?? 0]));
+
   let totalBank = 0;
   for (const acc of accounts) {
-    const snapshot = await prisma.accountBalance.findFirst({
-      where: { accountId: acc.id },
-      orderBy: { date: "desc" },
-    });
-    if (snapshot) { totalBank += snapshot.balance; continue; }
-
-    const lastTxWithBalance = await prisma.transaction.findFirst({
-      where: { accountId: acc.id, balance: { not: null } },
-      orderBy: { date: "desc" },
-    });
-    if (lastTxWithBalance?.balance != null) { totalBank += lastTxWithBalance.balance; continue; }
-
-    const txSum = await prisma.transaction.aggregate({
-      where: { accountId: acc.id },
-      _sum: { amount: true },
-    });
-    totalBank += txSum._sum.amount ?? 0;
+    const snap = snapshotMap.get(acc.id);
+    const tx   = txBalMap.get(acc.id);
+    if (snap && tx) {
+      totalBank += tx.date >= snap.date ? (tx.balance as number) : snap.balance;
+    } else if (tx) {
+      totalBank += tx.balance as number;
+    } else if (snap) {
+      totalBank += snap.balance;
+    } else {
+      totalBank += txSumMap.get(acc.id) ?? 0;
+    }
   }
 
   // ── 2. Investment portfolio ─────────────────────────────────────────────────
-  const positions = await prisma.investmentPosition.findMany();
   const portfolioValue = positions.reduce((s, p) => s + p.shares * (p.currentPrice ?? p.averageCost), 0);
   const portfolioCost  = positions.reduce((s, p) => s + p.shares * p.averageCost, 0);
 
-  // ── 3. Net Worth = bank cash + portfolio (no liabilities tracked yet) ───────
-  const netWorth = totalBank + portfolioValue;
+  // ── 3. Net Worth = bank + portfolio − liabilities ──────────────────────────
+  const totalLiabilities = liabilityRecords.reduce((s, l) => s + l.balance, 0);
+  const netWorth = totalBank + portfolioValue - totalLiabilities;
 
   // Previous net worth snapshot for % change
   const prevSnap = await prisma.netWorthSnapshot.findFirst({
@@ -81,8 +101,8 @@ export async function GET() {
       // Net worth
       netWorth,
       netWorthChange,
-      totalAssets: netWorth,
-      liabilities: 0,
+      totalAssets: totalBank + portfolioValue,
+      liabilities: totalLiabilities,
 
       // Savings rate: previous complete month (stable, not distorted by partial months)
       savingsRate: calcSavingsRate(prevIncome, prevExpenses),

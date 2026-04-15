@@ -36,15 +36,64 @@ export async function POST(req: NextRequest) {
   }) as { count: number };
   const count = result.count;
 
-  // Guardar snapshot de patrimonio neto
-  const accounts = await prisma.account.findMany({ where: { isActive: true } });
-  let totalBank = 0;
-  for (const acc of accounts) {
-    const txSum = await prisma.transaction.aggregate({
-      where: { accountId: acc.id },
-      _sum: { amount: true },
+  // Update AccountBalance snapshot for the imported account so balance is immediately correct
+  const latestTxWithBalance = await prisma.transaction.findFirst({
+    where: { accountId, balance: { not: null } },
+    orderBy: [{ date: "desc" }],
+    select: { balance: true, date: true },
+  });
+  if (latestTxWithBalance) {
+    // Replace any old snapshot — delete all and insert fresh one with the bank's latest balance
+    await prisma.accountBalance.deleteMany({ where: { accountId } });
+    await prisma.accountBalance.create({
+      data: { accountId, balance: latestTxWithBalance.balance!, date: latestTxWithBalance.date },
     });
-    totalBank += txSum._sum.amount ?? 0;
+  }
+
+  // Guardar snapshot de patrimonio neto — compute totalBank using date-aware balance logic
+  const allAccounts = await prisma.account.findMany({ where: { isActive: true } });
+  const allAccountIds = allAccounts.map(a => a.id);
+
+  const [balanceSnapshots, lastTxBals] = await Promise.all([
+    prisma.accountBalance.findMany({
+      where: { accountId: { in: allAccountIds } },
+      orderBy: { date: "desc" },
+      distinct: ["accountId"],
+      select: { accountId: true, balance: true, date: true },
+    }),
+    prisma.transaction.findMany({
+      where: { accountId: { in: allAccountIds }, balance: { not: null } },
+      orderBy: { date: "desc" },
+      distinct: ["accountId"],
+      select: { accountId: true, balance: true, date: true },
+    }),
+  ]);
+  const bsMap  = new Map(balanceSnapshots.map(s => [s.accountId, s]));
+  const txbMap = new Map(lastTxBals.map(t => [t.accountId, t]));
+
+  const needsSumIds = allAccountIds.filter(id => !bsMap.has(id) && !txbMap.has(id));
+  const txSumsSnap = needsSumIds.length > 0
+    ? await prisma.transaction.groupBy({
+        by: ["accountId"],
+        where: { accountId: { in: needsSumIds } },
+        _sum: { amount: true },
+      })
+    : [];
+  const txSumMapSnap = new Map(txSumsSnap.map(s => [s.accountId, s._sum.amount ?? 0]));
+
+  let totalBank = 0;
+  for (const acc of allAccounts) {
+    const snap = bsMap.get(acc.id);
+    const tx   = txbMap.get(acc.id);
+    if (snap && tx) {
+      totalBank += tx.date >= snap.date ? (tx.balance as number) : snap.balance;
+    } else if (tx) {
+      totalBank += tx.balance as number;
+    } else if (snap) {
+      totalBank += snap.balance;
+    } else {
+      totalBank += txSumMapSnap.get(acc.id) ?? 0;
+    }
   }
   const positions = await prisma.investmentPosition.findMany();
   const portfolioValue = positions.reduce(
