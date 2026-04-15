@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   if (editedByUser === "false") where.editedByUser = false;
   if (editedByUser === "true") where.editedByUser = true;
 
-  const [total, transactions] = await Promise.all([
+  const [total, transactions, aggregate] = await Promise.all([
     prisma.transaction.count({ where }),
     prisma.transaction.findMany({
       where,
@@ -53,9 +53,11 @@ export async function GET(req: NextRequest) {
         account: { select: { name: true, bank: true, color: true } },
       },
     }),
+    prisma.transaction.aggregate({ where, _sum: { amount: true } }),
   ]);
 
-  return NextResponse.json({ data: transactions, error: null, meta: { total, page, limit } });
+  const sum = aggregate._sum.amount ?? 0;
+  return NextResponse.json({ data: transactions, error: null, meta: { total, page, limit, sum } });
 }
 
 export async function POST(req: NextRequest) {

@@ -289,6 +289,21 @@ export default function AccountsPage() {
           </div>
         )}
 
+        {/* Filter summary */}
+        {!txLoading && (search || category || subcategory || selectedAccount || onlyUnedited) && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>{txData?.meta?.total ?? 0} resultados</span>
+            <span className="text-border">·</span>
+            <span>Suma:</span>
+            <span className={cn(
+              "font-semibold tabular-nums",
+              (txData?.meta?.sum ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"
+            )}>
+              {(txData?.meta?.sum ?? 0) >= 0 ? "+" : ""}{formatCurrency(txData?.meta?.sum ?? 0)}
+            </span>
+          </div>
+        )}
+
         {/* Transactions table */}
         <div className="rounded-xl border border-border overflow-hidden">
           <div className="overflow-x-auto">
@@ -368,13 +383,29 @@ export default function AccountsPage() {
             </table>
           </div>
           {/* Pagination */}
-          {totalResults > 30 && (
+          {totalResults > 0 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border text-sm text-muted-foreground">
-              <span>{totalResults} transacciones</span>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Anterior</Button>
-                <Button variant="outline" size="sm" disabled={page * 30 >= totalResults} onClick={() => setPage(p => p + 1)}>Siguiente</Button>
+              <div className="flex items-center gap-2">
+                <span>{totalResults} transacciones</span>
+                {txData?.meta?.sum !== undefined && (
+                  <>
+                    <span className="text-border">·</span>
+                    <span>Total:</span>
+                    <span className={cn(
+                      "font-semibold tabular-nums",
+                      txData.meta.sum >= 0 ? "text-emerald-400" : "text-red-400"
+                    )}>
+                      {txData.meta.sum >= 0 ? "+" : ""}{formatCurrency(txData.meta.sum)}
+                    </span>
+                  </>
+                )}
               </div>
+              {totalResults > 30 && (
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>Anterior</Button>
+                  <Button variant="outline" size="sm" disabled={page * 30 >= totalResults} onClick={() => setPage(p => p + 1)}>Siguiente</Button>
+                </div>
+              )}
             </div>
           )}
         </div>

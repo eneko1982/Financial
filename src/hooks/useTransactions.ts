@@ -46,7 +46,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
     queryFn: async () => {
       const res = await fetch(`/api/transactions?${params}`);
       const json = await res.json();
-      return { data: json.data as Transaction[], meta: json.meta as { total: number; page: number; limit: number } };
+      return { data: json.data as Transaction[], meta: json.meta as { total: number; page: number; limit: number; sum: number } };
     },
   });
 }

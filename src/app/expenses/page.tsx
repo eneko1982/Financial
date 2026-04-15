@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Header } from "@/components/layout/Header";
 import { useCategories, useBudgets, useCashFlow } from "@/hooks/useAnalytics";
 import { useAccounts } from "@/hooks/useAccounts";
@@ -72,6 +72,7 @@ export default function ExpensesPage() {
   const monthTxs = (txData?.data ?? []).filter(
     (tx) => view === "income" ? tx.amount > 0 : tx.amount < 0
   );
+  const filteredSum = monthTxs.reduce((s, tx) => s + tx.amount, 0);
 
   // Subcategory options based on selected tx category
   const selectedTxCategoryObj = userCategories.find((c) => c.name === txCategory);
@@ -142,21 +143,47 @@ export default function ExpensesPage() {
             </CardHeader>
             <CardContent>
               {catLoading ? (
-                <div className="flex items-center justify-center h-[240px]">
-                  <Skeleton className="h-[200px] w-[200px] rounded-full" />
+                <div className="flex items-center justify-center h-[200px]">
+                  <Skeleton className="h-[160px] w-[160px] rounded-full" />
                 </div>
               ) : categories.length === 0 ? (
                 <p className="text-center text-sm text-muted-foreground py-8">Sin datos este mes</p>
               ) : (
-                <ResponsiveContainer width="100%" height={240}>
-                  <PieChart>
-                    <Pie data={categories} dataKey="amount" nameKey="category" cx="50%" cy="50%" innerRadius={60} outerRadius={100}>
-                      {categories.map((cat, i) => <Cell key={i} fill={cat.color} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [formatCurrency(v)]} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                  </PieChart>
-                </ResponsiveContainer>
+                <div className="space-y-3">
+                  <ResponsiveContainer width="100%" height={190}>
+                    <PieChart>
+                      <Pie
+                        data={categories}
+                        dataKey="amount"
+                        nameKey="category"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={52}
+                        outerRadius={88}
+                        strokeWidth={0}
+                      >
+                        {categories.map((cat, i) => <Cell key={i} fill={cat.color} />)}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }}
+                        formatter={(v: number) => [formatCurrency(Math.abs(v)), ""]}
+                        labelFormatter={(label) => <span className="font-medium text-foreground">{label}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  {/* Custom legend */}
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 max-h-44 overflow-y-auto pr-1">
+                    {categories.map((cat) => (
+                      <div key={cat.category} className="flex items-center gap-2 min-w-0">
+                        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: cat.color }} />
+                        <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{cat.category}</span>
+                        <span className="text-xs font-mono font-semibold tabular-nums shrink-0 text-foreground">
+                          {formatCurrency(Math.abs(cat.amount))}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -228,6 +255,16 @@ export default function ExpensesPage() {
             <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
               Movimientos — {monthOptions.find(m => m.val === selectedMonth)?.label}
             </h2>
+            {!txLoading && monthTxs.length > 0 && (
+              <div className="flex items-center gap-1.5 text-sm">
+                <span className="text-muted-foreground">{monthTxs.length} movimientos</span>
+                <span className="text-border">·</span>
+                <span className="text-muted-foreground">Suma:</span>
+                <span className={cn("font-semibold tabular-nums", filteredSum >= 0 ? "text-emerald-400" : "text-red-400")}>
+                  {filteredSum >= 0 ? "+" : ""}{formatCurrency(filteredSum)}
+                </span>
+              </div>
+            )}
             {/* Category filter for transactions */}
             <div className="ml-auto flex gap-2">
               <Select value={txCategory || "all"} onValueChange={(v) => { setTxCategory(v === "all" ? "" : v); setTxSubcategory(""); setTxPage(1); }}>
