@@ -79,4 +79,5 @@ export interface FinancialContext {
   goals: { name: string; currentAmount: number; targetAmount: number; progress: number; targetDate?: string }[];
   budgets: { category: string; budget: number; spent: number; percent: number }[];
   recentTransactions: RecentTransaction[];
+  historyStart: string; // label like "enero 2026" used in system prompt
 }

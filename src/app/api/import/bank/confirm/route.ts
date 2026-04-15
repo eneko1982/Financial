@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { ParsedTransaction } from "@/types/financial";
+import { invalidateFinancialContext } from "@/lib/financial-context";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
@@ -51,6 +52,9 @@ export async function POST(req: NextRequest) {
       breakdown: JSON.stringify({ bank: totalBank, portfolio: portfolioValue }),
     },
   });
+
+  // Invalidate AI context cache so next chat uses fresh data
+  invalidateFinancialContext();
 
   return NextResponse.json({ data: { count }, error: null });
 }

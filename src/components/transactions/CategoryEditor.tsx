@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,8 @@ interface Props {
   currentSubcategory: string | null;
   currentNotes: string | null;
   editedByUser: boolean;
+  /** Description of the transaction, used for "apply to similar" */
+  description?: string;
   /** Extra query keys to invalidate after save (besides ["transactions"]) */
   extraInvalidate?: string[][];
 }
@@ -32,6 +34,7 @@ export function CategoryEditor({
   currentSubcategory,
   currentNotes,
   editedByUser,
+  description,
   extraInvalidate = [],
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -41,7 +44,16 @@ export function CategoryEditor({
   const [subcategoryInput, setSubcategoryInput] = useState("");
   const [notes, setNotes] = useState(currentNotes ?? "");
   const [saving, setSaving] = useState(false);
+  const [applyToSimilar, setApplyToSimilar] = useState(false);
+  const [applyCount, setApplyCount] = useState<number | null>(null);
   const qc = useQueryClient();
+
+  // Clear applyCount feedback after 3s
+  useEffect(() => {
+    if (applyCount === null) return;
+    const t = setTimeout(() => setApplyCount(null), 3000);
+    return () => clearTimeout(t);
+  }, [applyCount]);
 
   const { data: userCategories = [] } = useUserCategories();
 
@@ -52,6 +64,8 @@ export function CategoryEditor({
     setSubcategory(currentSubcategory ?? "");
     setSubcategoryInput("");
     setNotes(currentNotes ?? "");
+    setApplyToSimilar(false);
+    setApplyCount(null);
     setOpen(true);
   }
 
@@ -91,6 +105,20 @@ export function CategoryEditor({
           notes: finalNotes,
         }),
       });
+
+      // Optionally apply category to all transactions with similar description
+      if (applyToSimilar && finalCategory && description) {
+        // Use first 4+ significant words of description as the pattern
+        const pattern = description.trim().split(/\s+/).slice(0, 5).join(" ");
+        const res = await fetch("/api/transactions/bulk-categorize", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ descriptionPattern: pattern, category: finalCategory, subcategory: finalSubcategory }),
+        });
+        const json = await res.json();
+        setApplyCount(json.data?.count ?? 0);
+      }
+
       qc.invalidateQueries({ queryKey: ["transactions"] });
       for (const keys of extraInvalidate) {
         qc.invalidateQueries({ queryKey: keys });
@@ -282,13 +310,29 @@ export function CategoryEditor({
             </div>
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
-              Cancelar
-            </Button>
-            <Button type="button" disabled={saving} onClick={handleSave}>
-              {saving ? "Guardando..." : "Guardar"}
-            </Button>
+          <DialogFooter className="flex-col gap-3 sm:flex-col">
+            {description && (
+              <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer w-full">
+                <input
+                  type="checkbox"
+                  checked={applyToSimilar}
+                  onChange={e => setApplyToSimilar(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-primary"
+                />
+                Aplicar también a movimientos similares
+              </label>
+            )}
+            {applyCount !== null && (
+              <p className="text-xs text-emerald-400 w-full">{applyCount} movimiento{applyCount !== 1 ? "s" : ""} actualizado{applyCount !== 1 ? "s" : ""}</p>
+            )}
+            <div className="flex gap-2 justify-end w-full">
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="button" disabled={saving} onClick={handleSave}>
+                {saving ? "Guardando..." : "Guardar"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

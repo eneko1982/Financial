@@ -14,6 +14,7 @@ import { formatCurrency } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils/cn";
 import { useQueryClient } from "@tanstack/react-query";
 import { calcMonthsToGoal } from "@/lib/utils/calculations";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const GOAL_ICONS: Record<string, string> = {
   emergency: "🛡️", travel: "✈️", purchase: "🏠", retirement: "🌅", education: "📚", other: "🎯",
@@ -24,7 +25,7 @@ const GOAL_COLORS: Record<string, string> = {
 };
 
 export default function SavingsPage() {
-  const { data: goals = [] } = useSavingsGoals();
+  const { data: goals = [], isLoading: goalsLoading } = useSavingsGoals();
   const [createOpen, setCreateOpen] = useState(false);
   const qc = useQueryClient();
 
@@ -68,7 +69,11 @@ export default function SavingsPage() {
         </div>
 
         {/* Goal cards */}
-        {goals.length === 0 ? (
+        {goalsLoading ? (
+          <div className="grid lg:grid-cols-2 xl:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-52 rounded-xl" />)}
+          </div>
+        ) : goals.length === 0 ? (
           <div className="rounded-xl border-2 border-dashed border-border p-12 text-center space-y-3">
             <Target className="h-10 w-10 text-muted-foreground mx-auto" />
             <p className="font-medium">Sin objetivos de ahorro</p>

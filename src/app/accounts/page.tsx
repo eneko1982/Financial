@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Plus, Search, Filter, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Filter, MoreVertical, Pencil, Trash2, Download } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount } from "@/hooks/useAccounts";
 import { useTransactions } from "@/hooks/useTransactions";
@@ -15,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { formatCurrency } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils/cn";
 import { CategoryEditor } from "@/components/transactions/CategoryEditor";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const BANK_COLORS: Record<string, string> = {
   BBVA: "#00A1E0", Santander: "#EC0000", CaixaBank: "#007AFF", ING: "#FF6200",
@@ -22,7 +23,7 @@ const BANK_COLORS: Record<string, string> = {
 };
 
 export default function AccountsPage() {
-  const { data: accounts = [] } = useAccounts();
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
   const { data: userCategories = [] } = useUserCategories();
   const [selectedAccount, setSelectedAccount] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -35,7 +36,7 @@ export default function AccountsPage() {
   const deleteAccount = useDeleteAccount();
   const { setImportOpen } = useUIStore();
 
-  const { data: txData } = useTransactions({
+  const { data: txData, isLoading: txLoading } = useTransactions({
     accountId: selectedAccount || undefined,
     search: search || undefined,
     category: category || undefined,
@@ -59,7 +60,11 @@ export default function AccountsPage() {
 
         {/* Account cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {accounts.map((acc) => (
+          {accountsLoading
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-28 rounded-xl" />
+              ))
+            : accounts.map((acc) => (
             <div
               key={acc.id}
               onClick={() => setSelectedAccount(selectedAccount === acc.id ? "" : acc.id)}
@@ -141,6 +146,21 @@ export default function AccountsPage() {
               </SelectContent>
             </Select>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 ml-auto"
+            onClick={() => {
+              const params = new URLSearchParams();
+              if (selectedAccount) params.set("accountId", selectedAccount);
+              if (category) params.set("category", category);
+              if (subcategory) params.set("subcategory", subcategory);
+              window.open(`/api/transactions/export?${params}`);
+            }}
+          >
+            <Download className="h-3.5 w-3.5" />
+            Exportar CSV
+          </Button>
         </div>
 
         {/* Transactions table */}
@@ -157,11 +177,20 @@ export default function AccountsPage() {
                 </tr>
               </thead>
               <tbody>
-                {(txData?.data ?? []).map((tx) => (
+                {txLoading
+                  ? Array.from({ length: 8 }).map((_, i) => (
+                      <tr key={i} className="border-t border-border">
+                        {Array.from({ length: 5 }).map((_, j) => (
+                          <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                        ))}
+                      </tr>
+                    ))
+                  : (txData?.data ?? []).map((tx) => (
                   <tr key={tx.id} className="border-t border-border hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{new Date(tx.date).toLocaleDateString("es-ES")}</td>
                     <td className="px-4 py-3 max-w-[280px]">
                       <p className="truncate font-medium">{tx.description}</p>
+                      {tx.notes && <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{tx.notes}</p>}
                     </td>
                     <td className="px-4 py-3">
                       <CategoryEditor
@@ -170,6 +199,7 @@ export default function AccountsPage() {
                         currentSubcategory={tx.subcategory ?? null}
                         currentNotes={tx.notes ?? null}
                         editedByUser={tx.editedByUser}
+                        description={tx.description}
                       />
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{tx.account?.name}</td>
@@ -178,7 +208,7 @@ export default function AccountsPage() {
                     </td>
                   </tr>
                 ))}
-                {(txData?.data ?? []).length === 0 && (
+                {!txLoading && (txData?.data ?? []).length === 0 && (
                   <tr><td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">No hay transacciones</td></tr>
                 )}
               </tbody>

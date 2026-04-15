@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { anthropic, ADVISOR_MODEL, buildSystemPrompt } from "@/lib/claude";
-import { buildFinancialContext } from "@/lib/financial-context";
+import { getFinancialContext } from "@/lib/financial-context";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ data: null, error: "ANTHROPIC_API_KEY no configurada. Añádela en .env.local" }, { status: 400 });
   }
 
-  const context = await buildFinancialContext();
+  const context = await getFinancialContext();
   const systemPrompt = buildSystemPrompt(context);
 
   // Keep last 10 message pairs max

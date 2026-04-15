@@ -1,11 +1,12 @@
 "use client";
-import { useState, useRef, useEffect, Suspense } from "react";
+import React, { useState, useRef, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { Bot, Send, Loader2, Sparkles, RefreshCw } from "lucide-react";
+import { Bot, Send, Loader2, Sparkles, RefreshCw, BarChart2, Plus } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils/cn";
 import { format } from "date-fns";
 
@@ -33,6 +34,7 @@ function AdvisorContent() {
   const [report, setReport] = useState<{ content: string; period: string } | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
   const [convId, setConvId] = useState<string | undefined>();
+  const [reportOpen, setReportOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -125,6 +127,37 @@ function AdvisorContent() {
     setReportLoading(false);
   }
 
+  function resetConversation() {
+    setMessages([]);
+    setConvId(undefined);
+    setInput("");
+  }
+
+  const ReportContent = () => (
+    <>
+      <div className="p-4 border-b border-border flex items-center justify-between">
+        <span className="text-sm font-semibold">Informe Mensual</span>
+        <Button size="sm" variant="outline" className="gap-1.5" onClick={generateReport} disabled={reportLoading}>
+          {reportLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+          Generar
+        </Button>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4">
+        {report ? (
+          <div className="text-xs space-y-1 leading-relaxed text-muted-foreground">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-3">{report.period}</p>
+            {renderMd(report.content)}
+          </div>
+        ) : (
+          <div className="text-center text-sm text-muted-foreground py-8 space-y-2">
+            <Sparkles className="h-8 w-8 text-muted-foreground/50 mx-auto" />
+            <p>Genera un informe mensual con análisis detallado de tu situación financiera</p>
+          </div>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <div className="flex flex-col h-[calc(100vh-56px)]">
       <Header title="Asesor Financiero IA" />
@@ -203,44 +236,48 @@ function AdvisorContent() {
                 ))}
               </div>
             )}
-            <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); }} className="flex gap-2">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Pregunta sobre tus finanzas..."
-                disabled={loading}
-                className="flex-1"
-              />
-              <Button type="submit" disabled={loading || !input.trim()} size="icon">
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            <div className="flex gap-2 items-center">
+              <form onSubmit={(e) => { e.preventDefault(); sendMessage(input); }} className="flex gap-2 flex-1">
+                <Input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Pregunta sobre tus finanzas..."
+                  disabled={loading}
+                  className="flex-1"
+                />
+                <Button type="submit" disabled={loading || !input.trim()} size="icon">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </form>
+              {messages.length > 0 && (
+                <Button type="button" variant="ghost" size="icon" onClick={resetConversation} title="Nueva conversación">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              )}
+              {/* Report button visible on non-XL screens */}
+              <Button type="button" variant="ghost" size="icon" onClick={() => setReportOpen(true)} title="Informe mensual" className="xl:hidden">
+                <BarChart2 className="h-4 w-4" />
               </Button>
-            </form>
+            </div>
           </div>
         </div>
 
-        {/* Report sidebar */}
+        {/* Report sidebar — visible on XL+ screens */}
         <aside className="hidden xl:flex w-80 border-l border-border flex-col">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <span className="text-sm font-semibold">Informe Mensual</span>
-            <Button size="sm" variant="outline" className="gap-1.5" onClick={generateReport} disabled={reportLoading}>
-              {reportLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-              Generar
-            </Button>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4">
-            {report ? (
-              <div className="text-xs space-y-1 leading-relaxed text-muted-foreground">
-                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-3">{report.period}</p>
-                {renderMd(report.content)}
-              </div>
-            ) : (
-              <div className="text-center text-sm text-muted-foreground py-8 space-y-2">
-                <Sparkles className="h-8 w-8 text-muted-foreground/50 mx-auto" />
-                <p>Genera un informe mensual con análisis detallado de tu situación financiera</p>
-              </div>
-            )}
-          </div>
+          <ReportContent />
         </aside>
+
+        {/* Report dialog for smaller screens */}
+        <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+          <DialogContent className="max-w-lg max-h-[80vh] flex flex-col xl:hidden">
+            <DialogHeader>
+              <DialogTitle>Informe Mensual</DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto">
+              <ReportContent />
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
@@ -255,13 +292,98 @@ export default function AdvisorPage() {
   );
 }
 
-function renderMd(text: string) {
+// Parse inline markdown: **bold**, *italic*, `code`
+function parseInline(text: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  // Regex: bold (**), italic (*), code (`)
+  const regex = /(\*\*(.+?)\*\*|\*(.+?)\*|`(.+?)`)/g;
+  let last = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    if (match[2] !== undefined) parts.push(<strong key={match.index} className="font-semibold text-foreground">{match[2]}</strong>);
+    else if (match[3] !== undefined) parts.push(<em key={match.index} className="italic">{match[3]}</em>);
+    else if (match[4] !== undefined) parts.push(<code key={match.index} className="bg-muted px-1 rounded text-[10px] font-mono">{match[4]}</code>);
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
+function renderMd(text: string): React.ReactNode[] {
   const lines = text.split("\n");
-  return lines.map((line, i) => {
-    if (line.startsWith("## ")) return <p key={i} className="font-bold text-sm mt-3 mb-1 text-foreground">{line.slice(3)}</p>;
-    if (line.startsWith("### ")) return <p key={i} className="font-semibold text-xs mt-2 mb-0.5 text-foreground">{line.slice(4)}</p>;
-    if (line.startsWith("- ") || line.startsWith("* ")) return <p key={i} className="flex gap-1.5 text-xs"><span className="text-primary">•</span>{line.slice(2)}</p>;
-    if (line.trim() === "") return <div key={i} className="h-1" />;
-    return <p key={i} className="text-xs leading-relaxed">{line}</p>;
-  });
+  const result: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Table block: collect consecutive pipe lines
+    if (line.trim().startsWith("|") && line.trim().endsWith("|")) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith("|") && lines[i].trim().endsWith("|")) {
+        tableLines.push(lines[i]);
+        i++;
+      }
+      if (tableLines.length >= 2) {
+        const headers = tableLines[0].split("|").filter(Boolean).map(s => s.trim());
+        // skip separator row (---) if present
+        const dataStart = tableLines[1].replace(/\s/g, "").replace(/[-|]/g, "") === "" ? 2 : 1;
+        const rows = tableLines.slice(dataStart).map(r => r.split("|").filter(Boolean).map(s => s.trim()));
+        result.push(
+          <div key={`table-${i}`} className="overflow-x-auto my-2">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr>{headers.map((h, j) => <th key={j} className="border border-border px-3 py-1.5 text-left font-semibold bg-muted/50">{parseInline(h)}</th>)}</tr>
+              </thead>
+              <tbody>
+                {rows.map((row, ri) => (
+                  <tr key={ri} className="border-t border-border hover:bg-muted/20">
+                    {row.map((cell, ci) => <td key={ci} className="border border-border px-3 py-1.5">{parseInline(cell)}</td>)}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+      continue;
+    }
+
+    // Blockquote
+    if (line.startsWith("> ")) {
+      result.push(<div key={i} className="border-l-2 border-primary/40 pl-3 italic text-muted-foreground text-xs my-1">{parseInline(line.slice(2))}</div>);
+      i++; continue;
+    }
+
+    // H2
+    if (line.startsWith("## ")) {
+      result.push(<p key={i} className="font-bold text-sm mt-3 mb-1 text-foreground">{parseInline(line.slice(3))}</p>);
+      i++; continue;
+    }
+
+    // H3
+    if (line.startsWith("### ")) {
+      result.push(<p key={i} className="font-semibold text-xs mt-2 mb-0.5 text-foreground">{parseInline(line.slice(4))}</p>);
+      i++; continue;
+    }
+
+    // Bullet
+    if (line.startsWith("- ") || line.startsWith("* ")) {
+      result.push(<p key={i} className="flex gap-1.5 text-xs"><span className="text-primary shrink-0">•</span><span>{parseInline(line.slice(2))}</span></p>);
+      i++; continue;
+    }
+
+    // Empty line
+    if (line.trim() === "") {
+      result.push(<div key={i} className="h-1" />);
+      i++; continue;
+    }
+
+    // Regular paragraph
+    result.push(<p key={i} className="text-xs leading-relaxed">{parseInline(line)}</p>);
+    i++;
+  }
+
+  return result;
 }

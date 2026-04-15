@@ -33,7 +33,8 @@ export function buildSystemPrompt(ctx: import("@/types/financial").FinancialCont
   type MonthSummary = { income: number; expenses: number };
   const monthMap: Record<string, MonthSummary> = {};
   for (const t of allTxs) {
-    const key = t.date.slice(3, 10); // "MM/YYYY" from "DD/MM/YYYY"
+    const [, mm, yyyy] = t.date.split("/"); // "DD/MM/YYYY" → extract MM and YYYY
+    const key = `${mm}/${yyyy}`;
     if (!monthMap[key]) monthMap[key] = { income: 0, expenses: 0 };
     if (t.amount > 0) monthMap[key].income  += t.amount;
     else              monthMap[key].expenses += Math.abs(t.amount);
@@ -57,7 +58,10 @@ export function buildSystemPrompt(ctx: import("@/types/financial").FinancialCont
 
   // Individual transactions — all of them (ordered desc by date), formatted as compact TSV
   const txLines = allTxs.map(
-    (t) => `${t.date}\t${t.bank}/${t.account}\t${t.amount >= 0 ? "+" : ""}${t.amount.toFixed(2)} €\t${t.category ?? "—"}\t${t.description}`
+    (t) => {
+      const cat = t.category ? (t.subcategory ? `${t.category}/${t.subcategory}` : t.category) : "—";
+      return `${t.date}\t${t.bank}/${t.account}\t${t.amount >= 0 ? "+" : ""}${t.amount.toFixed(2)} €\t${cat}\t${t.description}`;
+    }
   ).join("\n");
 
   return `Eres un asesor financiero personal experto y de confianza. Ayudas al usuario a analizar y mejorar su situación financiera de forma clara, precisa y personalizada. Siempre respondes en español, con un tono profesional pero cercano, como un amigo que es asesor financiero.
@@ -93,16 +97,16 @@ ${goalList || "  (sin objetivos definidos)"}
 ### Presupuesto Mensual
 ${budgetList || "  (sin presupuestos definidos)"}
 
-### Resumen mensual (desde enero 2026)
+### Resumen mensual (desde ${ctx.historyStart})
 ${monthSummaryLines || "  (sin datos)"}
 
-### Historial de movimientos detallado (desde el 1 de enero de 2026)
+### Historial de movimientos detallado (desde ${ctx.historyStart})
 Formato: Fecha | Banco/Cuenta | Importe | Categoría | Descripción
 ${txLines || "  (sin movimientos)"}
 
 ## Tu rol
 - Analiza la situación financiera basándote ÚNICAMENTE en los datos anteriores
-- Tienes acceso al historial COMPLETO de movimientos desde el 1 de enero de 2026 — úsalo para dar análisis detallados por mes
+- Tienes acceso al historial COMPLETO de movimientos desde ${ctx.historyStart} — úsalo para dar análisis detallados por mes
 - Da consejos concretos, accionables y específicos a la situación del usuario
 - Cuando calcules proyecciones, explica brevemente los supuestos
 - Si te preguntan algo para lo que no tienes datos, indícalo claramente

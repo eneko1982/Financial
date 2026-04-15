@@ -18,6 +18,8 @@ import { formatCurrency } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils/cn";
 import { useQueryClient } from "@tanstack/react-query";
 import { CategoryEditor } from "@/components/transactions/CategoryEditor";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Download } from "lucide-react";
 
 type ViewType = "expense" | "income";
 
@@ -35,11 +37,11 @@ export default function ExpensesPage() {
 
   const { data: accounts = [] } = useAccounts();
   const { data: userCategories = [] } = useUserCategories();
-  const { data: catData } = useCategories(selectedMonth, view, accountId || undefined);
-  const { data: budgets = [] } = useBudgets(selectedMonth);
+  const { data: catData, isLoading: catLoading } = useCategories(selectedMonth, view, accountId || undefined);
+  const { data: budgets = [], isLoading: budgetsLoading } = useBudgets(selectedMonth);
   const { data: cashFlow = [] } = useCashFlow();
 
-  const { data: txData } = useTransactions({
+  const { data: txData, isLoading: txLoading } = useTransactions({
     accountId: accountId || undefined,
     category: txCategory || undefined,
     subcategory: txSubcategory || undefined,
@@ -139,13 +141,17 @@ export default function ExpensesPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {categories.length === 0 ? (
+              {catLoading ? (
+                <div className="flex items-center justify-center h-[240px]">
+                  <Skeleton className="h-[200px] w-[200px] rounded-full" />
+                </div>
+              ) : categories.length === 0 ? (
                 <p className="text-center text-sm text-muted-foreground py-8">Sin datos este mes</p>
               ) : (
                 <ResponsiveContainer width="100%" height={240}>
                   <PieChart>
                     <Pie data={categories} dataKey="amount" nameKey="category" cx="50%" cy="50%" innerRadius={60} outerRadius={100}>
-                      {categories.map((_, i) => <Cell key={i} fill={CATEGORY_COLORS[i % CATEGORY_COLORS.length]} />)}
+                      {categories.map((cat, i) => <Cell key={i} fill={cat.color} />)}
                     </Pie>
                     <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [formatCurrency(v)]} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -185,8 +191,8 @@ export default function ExpensesPage() {
             <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Presupuesto vs Gasto</h2>
             {categories.length === 0 && <p className="text-sm text-muted-foreground">Sin transacciones este mes</p>}
             <div className="grid lg:grid-cols-2 gap-3">
-              {categories.map((cat, i) => {
-                const color = CATEGORY_COLORS[i % CATEGORY_COLORS.length];
+              {categories.map((cat) => {
+                const color = cat.color;
                 const budget = budgets.find(b => b.category === cat.category);
                 const pct = budget ? Math.min((cat.amount / budget.amount) * 100, 100) : null;
                 const over = budget && cat.amount > budget.amount;
@@ -248,6 +254,25 @@ export default function ExpensesPage() {
                   </SelectContent>
                 </Select>
               )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+                onClick={() => {
+                  const params = new URLSearchParams();
+                  params.set("dateFrom", `${selectedMonth}-01`);
+                  const d = new Date(`${selectedMonth}-01`);
+                  d.setMonth(d.getMonth() + 1); d.setDate(0);
+                  params.set("dateTo", d.toISOString().slice(0, 10));
+                  if (accountId) params.set("accountId", accountId);
+                  if (txCategory) params.set("category", txCategory);
+                  if (txSubcategory) params.set("subcategory", txSubcategory);
+                  window.open(`/api/transactions/export?${params}`);
+                }}
+              >
+                <Download className="h-3 w-3" />
+                CSV
+              </Button>
             </div>
           </div>
           <div className="rounded-xl border border-border overflow-hidden">
@@ -262,13 +287,23 @@ export default function ExpensesPage() {
                 </tr>
               </thead>
               <tbody>
-                {monthTxs.length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">No hay movimientos</td></tr>
-                )}
-                {monthTxs.map(tx => (
+                {txLoading
+                  ? Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={i} className="border-t border-border">
+                        {Array.from({ length: 5 }).map((_, j) => (
+                          <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                        ))}
+                      </tr>
+                    ))
+                  : monthTxs.length === 0
+                    ? <tr><td colSpan={5} className="px-4 py-10 text-center text-sm text-muted-foreground">No hay movimientos</td></tr>
+                    : monthTxs.map(tx => (
                   <tr key={tx.id} className="border-t border-border hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{new Date(tx.date).toLocaleDateString("es-ES")}</td>
-                    <td className="px-4 py-3 max-w-[240px] truncate font-medium">{tx.description}</td>
+                    <td className="px-4 py-3 max-w-[240px]">
+                      <p className="truncate font-medium">{tx.description}</p>
+                      {tx.notes && <p className="text-[10px] text-muted-foreground/70 truncate mt-0.5">{tx.notes}</p>}
+                    </td>
                     <td className="px-4 py-3">
                       <CategoryEditor
                         transactionId={tx.id}
@@ -276,6 +311,7 @@ export default function ExpensesPage() {
                         currentSubcategory={tx.subcategory ?? null}
                         currentNotes={tx.notes ?? null}
                         editedByUser={tx.editedByUser}
+                        description={tx.description}
                         extraInvalidate={[["analytics", "categories"]]}
                       />
                     </td>
@@ -284,7 +320,8 @@ export default function ExpensesPage() {
                       {tx.amount >= 0 ? "+" : ""}{formatCurrency(tx.amount)}
                     </td>
                   </tr>
-                ))}
+                ))
+                }
               </tbody>
             </table>
           </div>
@@ -304,7 +341,8 @@ export default function ExpensesPage() {
 
 function BudgetDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
-  const [category, setCategory] = useState("Alimentación");
+  const { data: userCategories = [] } = useUserCategories();
+  const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -325,9 +363,9 @@ function BudgetDialog({ open, onClose }: { open: boolean; onClose: () => void })
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Categoría</label>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Seleccionar categoría..." /></SelectTrigger>
               <SelectContent>
-                {["Alimentación","Restaurantes","Transporte","Salud","Entretenimiento","Ropa","Hogar","Suministros","Telecomunicaciones","Seguros","Educación","Viajes"].map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                {userCategories.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>

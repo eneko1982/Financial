@@ -14,7 +14,8 @@ import { formatCurrency } from "@/lib/utils/currency";
 import { parseSpanishNumber } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils/cn";
 import { useQueryClient } from "@tanstack/react-query";
-import { Plus, TrendingUp, TrendingDown, ClipboardPaste, Pencil, Trash2 } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, ClipboardPaste, Pencil, Trash2, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { MoreVertical } from "lucide-react";
 
@@ -23,7 +24,7 @@ const ASSET_COLORS: Record<string, string> = {
 };
 
 export default function InvestmentsPage() {
-  const { data: posData } = useInvestmentPositions();
+  const { data: posData, isLoading: posLoading } = useInvestmentPositions();
   const positions = posData?.data ?? [];
   const totalValue = posData?.totalValue ?? 0;
   const totalCost = positions.reduce((s, p) => s + p.costBasis, 0);
@@ -32,12 +33,37 @@ export default function InvestmentsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [editPos, setEditPos] = useState<(typeof positions)[0] | null>(null);
+  const [posSearch, setPosSearch] = useState("");
+  const [sortKey, setSortKey] = useState<"ticker" | "currentValue" | "pnlPct" | "weight">("currentValue");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const { setImportOpen } = useUIStore();
   const qc = useQueryClient();
 
   async function handleDelete(id: string) {
     await fetch(`/api/investments/positions/${id}`, { method: "DELETE" });
     qc.invalidateQueries({ queryKey: ["investments"] });
+  }
+
+  // Filtered and sorted positions for the table
+  const filteredPositions = positions
+    .filter(p => !posSearch || p.ticker.toUpperCase().includes(posSearch.toUpperCase()) || p.name.toLowerCase().includes(posSearch.toLowerCase()))
+    .sort((a, b) => {
+      const mult = sortDir === "asc" ? 1 : -1;
+      if (sortKey === "ticker") return mult * a.ticker.localeCompare(b.ticker);
+      if (sortKey === "currentValue") return mult * (a.currentValue - b.currentValue);
+      if (sortKey === "pnlPct") return mult * (a.pnlPct - b.pnlPct);
+      if (sortKey === "weight") return mult * (a.weight - b.weight);
+      return 0;
+    });
+
+  function toggleSort(key: typeof sortKey) {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("desc"); }
+  }
+
+  function SortIcon({ col }: { col: typeof sortKey }) {
+    if (sortKey !== col) return <ChevronsUpDown className="h-3 w-3 text-muted-foreground/50" />;
+    return sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />;
   }
 
   // Allocation by asset class
@@ -55,7 +81,12 @@ export default function InvestmentsPage() {
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
 
         {/* Summary KPIs */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {posLoading ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          </div>
+        ) : null}
+        <div className={posLoading ? "hidden" : "grid grid-cols-2 lg:grid-cols-4 gap-4"}>
           <Card><CardContent className="p-5">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Valor Total</p>
             <p className="text-2xl font-bold mt-1 tabular-nums">{formatCurrency(totalValue)}</p>
@@ -121,9 +152,15 @@ export default function InvestmentsPage() {
 
         {/* Positions table */}
         <div>
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
             <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Posiciones</h2>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Buscar ticker o nombre..."
+                value={posSearch}
+                onChange={e => setPosSearch(e.target.value)}
+                className="h-8 w-52 text-xs"
+              />
               <Button size="sm" variant="outline" className="gap-2" onClick={() => setBulkOpen(true)}><ClipboardPaste className="h-3.5 w-3.5" />Pegar desde broker</Button>
               <Button size="sm" className="gap-2" onClick={() => setAddOpen(true)}><Plus className="h-3.5 w-3.5" />Añadir posición</Button>
             </div>
@@ -133,19 +170,35 @@ export default function InvestmentsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-muted/50 border-b border-border">
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Ticker</th>
+                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">
+                      <button onClick={() => toggleSort("ticker")} className="flex items-center gap-1 hover:text-foreground transition-colors">Ticker<SortIcon col="ticker" /></button>
+                    </th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Nombre</th>
                     <th className="text-left px-4 py-3 font-medium text-muted-foreground">Clase</th>
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">Acciones</th>
                     <th className="text-right px-4 py-3 font-medium text-muted-foreground">Coste medio</th>
-                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Valor actual</th>
-                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">P&L</th>
-                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Peso</th>
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">
+                      <button onClick={() => toggleSort("currentValue")} className="flex items-center justify-end gap-1 w-full hover:text-foreground transition-colors">Valor actual<SortIcon col="currentValue" /></button>
+                    </th>
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">
+                      <button onClick={() => toggleSort("pnlPct")} className="flex items-center justify-end gap-1 w-full hover:text-foreground transition-colors">P&L<SortIcon col="pnlPct" /></button>
+                    </th>
+                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">
+                      <button onClick={() => toggleSort("weight")} className="flex items-center justify-end gap-1 w-full hover:text-foreground transition-colors">Peso<SortIcon col="weight" /></button>
+                    </th>
                     <th className="px-2 py-3" />
                   </tr>
                 </thead>
                 <tbody>
-                  {positions.map((p) => (
+                  {posLoading
+                    ? Array.from({ length: 5 }).map((_, i) => (
+                        <tr key={i} className="border-t border-border">
+                          {Array.from({ length: 9 }).map((_, j) => (
+                            <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                          ))}
+                        </tr>
+                      ))
+                    : filteredPositions.map((p) => (
                     <tr key={p.id} className="border-t border-border hover:bg-muted/20 transition-colors">
                       <td className="px-4 py-3 font-mono font-bold">{p.ticker}</td>
                       <td className="px-4 py-3 max-w-[180px] truncate text-muted-foreground">{p.name}</td>
@@ -185,8 +238,8 @@ export default function InvestmentsPage() {
                       </td>
                     </tr>
                   ))}
-                  {positions.length === 0 && (
-                    <tr><td colSpan={8} className="px-4 py-12 text-center text-sm text-muted-foreground">No hay posiciones. Añade tu primera inversión.</td></tr>
+                  {!posLoading && positions.length === 0 && (
+                    <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-muted-foreground">No hay posiciones. Añade tu primera inversión.</td></tr>
                   )}
                 </tbody>
               </table>

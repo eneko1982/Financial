@@ -17,29 +17,46 @@ export async function GET() {
     orderBy: { createdAt: "asc" },
   });
 
-  // Attach current balance to each account.
-  // Priority: 1) manual AccountBalance snapshot, 2) last transaction's "Disponible" running balance, 3) sum of amounts
-  const withBalance = await Promise.all(
-    accounts.map(async (acc) => {
-      const snapshot = await prisma.accountBalance.findFirst({
-        where: { accountId: acc.id },
-        orderBy: { date: "desc" },
-      });
-      if (snapshot) return { ...acc, balance: snapshot.balance };
+  if (accounts.length === 0) return NextResponse.json({ data: [], error: null });
 
-      const lastTxWithBalance = await prisma.transaction.findFirst({
-        where: { accountId: acc.id, balance: { not: null } },
-        orderBy: { date: "desc" },
-      });
-      if (lastTxWithBalance?.balance != null) return { ...acc, balance: lastTxWithBalance.balance };
+  const accountIds = accounts.map(a => a.id);
 
-      const txSum = await prisma.transaction.aggregate({
-        where: { accountId: acc.id },
+  // 1. Latest manual balance snapshot per account (bulk query)
+  const snapshots = await prisma.accountBalance.findMany({
+    where: { accountId: { in: accountIds } },
+    orderBy: { date: "desc" },
+    distinct: ["accountId"],
+    select: { accountId: true, balance: true },
+  });
+  const snapshotMap = new Map(snapshots.map(s => [s.accountId, s.balance]));
+
+  // 2. Latest transaction with balance field, for accounts missing a snapshot
+  const needsBalanceTx = accountIds.filter(id => !snapshotMap.has(id));
+  const lastTxBalances = needsBalanceTx.length > 0
+    ? await prisma.transaction.findMany({
+        where: { accountId: { in: needsBalanceTx }, balance: { not: null } },
+        orderBy: { date: "desc" },
+        distinct: ["accountId"],
+        select: { accountId: true, balance: true },
+      })
+    : [];
+  const lastTxBalanceMap = new Map(lastTxBalances.map(t => [t.accountId, t.balance as number]));
+
+  // 3. Sum of transactions for accounts with neither source
+  const needsSum = needsBalanceTx.filter(id => !lastTxBalanceMap.has(id));
+  const txSums = needsSum.length > 0
+    ? await prisma.transaction.groupBy({
+        by: ["accountId"],
+        where: { accountId: { in: needsSum } },
         _sum: { amount: true },
-      });
-      return { ...acc, balance: txSum._sum.amount ?? 0 };
-    })
-  );
+      })
+    : [];
+  const txSumMap = new Map(txSums.map(s => [s.accountId, s._sum.amount ?? 0]));
+
+  const withBalance = accounts.map(acc => ({
+    ...acc,
+    balance: snapshotMap.get(acc.id) ?? lastTxBalanceMap.get(acc.id) ?? txSumMap.get(acc.id) ?? 0,
+  }));
 
   return NextResponse.json({ data: withBalance, error: null });
 }

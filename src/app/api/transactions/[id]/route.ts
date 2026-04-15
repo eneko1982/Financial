@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { invalidateFinancialContext } from "@/lib/financial-context";
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const body = await req.json();
@@ -18,6 +19,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       editedByUser: true,
     },
   });
+  invalidateFinancialContext();
   return NextResponse.json({ data: tx, error: null });
 }
 

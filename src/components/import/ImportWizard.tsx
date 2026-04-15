@@ -10,7 +10,7 @@ import { formatCurrency } from "@/lib/utils/currency";
 import { useQueryClient } from "@tanstack/react-query";
 
 type Step = "upload" | "preview" | "confirm" | "done";
-type BankFormat = "bbva" | "santander" | "caixabank" | "ing" | "generic";
+type BankFormat = "bbva" | "santander" | "caixabank" | "ing" | "sabadell" | "revolut" | "generic";
 
 interface ParsedRow {
   date: string;
@@ -122,6 +122,8 @@ export function ImportWizard({ open, onClose, accounts }: ImportWizardProps) {
                       <SelectItem value="santander">Santander</SelectItem>
                       <SelectItem value="caixabank">CaixaBank</SelectItem>
                       <SelectItem value="ing">ING</SelectItem>
+                      <SelectItem value="sabadell">Sabadell</SelectItem>
+                      <SelectItem value="revolut">Revolut</SelectItem>
                       <SelectItem value="generic">Genérico</SelectItem>
                     </SelectContent>
                   </Select>

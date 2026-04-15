@@ -3,12 +3,14 @@ import { parseBBVA } from "./bbva";
 import { parseSantander } from "./santander";
 import { parseCaixaBank } from "./caixabank";
 import { parseING } from "./ing";
+import { parseSabadell } from "./sabadell";
+import { parseRevolut } from "./revolut";
 import { parseSpanishDate } from "@/lib/utils/dates";
 import { parseSpanishNumber } from "@/lib/utils/currency";
 import { classifyTransaction } from "@/lib/category-classifier";
 import md5 from "md5";
 
-export type BankFormat = "bbva" | "santander" | "caixabank" | "ing" | "generic";
+export type BankFormat = "bbva" | "santander" | "caixabank" | "ing" | "sabadell" | "revolut" | "generic";
 
 export interface ParserResult {
   transactions: ParsedTransaction[];
@@ -21,6 +23,8 @@ export function parseBank(rows: Record<string, string>[], format: BankFormat): P
     case "santander": return parseSantander(rows);
     case "caixabank": return parseCaixaBank(rows);
     case "ing": return parseING(rows);
+    case "sabadell": return parseSabadell(rows);
+    case "revolut": return parseRevolut(rows);
     default: return parseGeneric(rows);
   }
 }

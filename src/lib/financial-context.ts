@@ -1,8 +1,25 @@
 import { prisma } from "./prisma";
-import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths, startOfYear } from "date-fns";
 import { es } from "date-fns/locale";
 import type { FinancialContext } from "@/types/financial";
 import { calcSavingsRate, calcTotalReturn, calcGoalProgress, isInternalTransfer } from "./utils/calculations";
+
+// ── In-memory cache (TTL: 5 minutes) ────────────────────────────────────────
+// Safe for single-user personal finance app.
+let _ctxCache: { ctx: FinancialContext; expiresAt: number } | null = null;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+export function invalidateFinancialContext() {
+  _ctxCache = null;
+}
+
+export async function getFinancialContext(): Promise<FinancialContext> {
+  const now = Date.now();
+  if (_ctxCache && _ctxCache.expiresAt > now) return _ctxCache.ctx;
+  const ctx = await buildFinancialContext();
+  _ctxCache = { ctx, expiresAt: now + CACHE_TTL_MS };
+  return ctx;
+}
 
 export async function buildFinancialContext(): Promise<FinancialContext> {
   const now = new Date();
@@ -12,30 +29,46 @@ export async function buildFinancialContext(): Promise<FinancialContext> {
   const prevMonthEnd = endOfMonth(subMonths(now, 1));
 
   // ── Accounts with latest balances ──────────────────────────────────────────
-  // Same 3-priority logic as /api/accounts:
+  // 3-priority logic, N+1 eliminated with bulk queries:
   // 1) Manual AccountBalance snapshot, 2) last tx.balance (Disponible/Saldo), 3) tx sum
   const accounts = await prisma.account.findMany({ where: { isActive: true } });
-  const accountsWithBalance = await Promise.all(
-    accounts.map(async (acc) => {
-      const snapshot = await prisma.accountBalance.findFirst({
-        where: { accountId: acc.id },
-        orderBy: { date: "desc" },
-      });
-      if (snapshot) return { ...acc, balance: snapshot.balance };
+  const accountIds = accounts.map(a => a.id);
 
-      const lastTxWithBalance = await prisma.transaction.findFirst({
-        where: { accountId: acc.id, balance: { not: null } },
+  const snapshots = accountIds.length > 0
+    ? await prisma.accountBalance.findMany({
+        where: { accountId: { in: accountIds } },
         orderBy: { date: "desc" },
-      });
-      if (lastTxWithBalance?.balance != null) return { ...acc, balance: lastTxWithBalance.balance };
+        distinct: ["accountId"],
+        select: { accountId: true, balance: true },
+      })
+    : [];
+  const snapshotMap = new Map(snapshots.map(s => [s.accountId, s.balance]));
 
-      const txSum = await prisma.transaction.aggregate({
-        where: { accountId: acc.id },
+  const needsBalanceTx = accountIds.filter(id => !snapshotMap.has(id));
+  const lastTxBalances = needsBalanceTx.length > 0
+    ? await prisma.transaction.findMany({
+        where: { accountId: { in: needsBalanceTx }, balance: { not: null } },
+        orderBy: { date: "desc" },
+        distinct: ["accountId"],
+        select: { accountId: true, balance: true },
+      })
+    : [];
+  const lastTxBalanceMap = new Map(lastTxBalances.map(t => [t.accountId, t.balance as number]));
+
+  const needsSum = needsBalanceTx.filter(id => !lastTxBalanceMap.has(id));
+  const txSums = needsSum.length > 0
+    ? await prisma.transaction.groupBy({
+        by: ["accountId"],
+        where: { accountId: { in: needsSum } },
         _sum: { amount: true },
-      });
-      return { ...acc, balance: txSum._sum.amount ?? 0 };
-    })
-  );
+      })
+    : [];
+  const txSumMap = new Map(txSums.map(s => [s.accountId, s._sum.amount ?? 0]));
+
+  const accountsWithBalance = accounts.map(acc => ({
+    ...acc,
+    balance: snapshotMap.get(acc.id) ?? lastTxBalanceMap.get(acc.id) ?? txSumMap.get(acc.id) ?? 0,
+  }));
   const totalBankAssets = accountsWithBalance.reduce((s, a) => s + a.balance, 0);
 
   // ── Investment portfolio ────────────────────────────────────────────────────
@@ -143,11 +176,11 @@ export async function buildFinancialContext(): Promise<FinancialContext> {
     })
   );
 
-  // ── Full transaction history (from 1 Jan 2026, excluding internal transfers) ─
-  // Fixed start date so the AI always sees the complete year regardless of when
+  // ── Full transaction history (from start of current year, excluding internal transfers) ─
+  // Dynamic start date so the AI always sees the complete current year regardless of when
   // it is queried. No hard cap on count — take up to 2000 to cover a full year
   // across all accounts.
-  const historyStart = new Date("2026-01-01T00:00:00.000Z");
+  const historyStart = startOfYear(now);
   const rawRecentTxs = await prisma.transaction.findMany({
     where: { date: { gte: historyStart } },
     orderBy: { date: "desc" },
@@ -168,6 +201,7 @@ export async function buildFinancialContext(): Promise<FinancialContext> {
 
   return {
     date: format(now, "d 'de' MMMM yyyy", { locale: es }),
+    historyStart: format(historyStart, "MMMM yyyy", { locale: es }),
     netWorth,
     netWorthChange,
     totalAssets,

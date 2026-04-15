@@ -34,13 +34,20 @@ export async function GET(req: NextRequest) {
   const budgetMap: Record<string, number> = {};
   for (const b of budgets) budgetMap[b.category] = b.amount;
 
+  // Prefer user-defined category colors over auto-generated ones
+  const userCats = await prisma.userCategory.findMany({ where: { parentId: null }, select: { name: true, color: true } });
+  const userColorMap: Record<string, string> = {};
+  for (const uc of userCats) {
+    if (uc.color) userColorMap[uc.name] = uc.color;
+  }
+
   const categories = Object.entries(catMap)
     .sort((a, b) => b[1] - a[1])
     .map(([category, amount]) => ({
       category,
       amount,
       budget: budgetMap[category] ?? null,
-      color: getCategoryColor(category),
+      color: userColorMap[category] ?? getCategoryColor(category),
       percentage: total > 0 ? (amount / total) * 100 : 0,
     }));
 
