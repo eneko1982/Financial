@@ -3,11 +3,12 @@ import { prisma } from "@/lib/prisma";
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const body = await req.json();
-  const { name, color } = body as { name?: string; color?: string };
+  const { name, color, type } = body as { name?: string; color?: string; type?: string };
 
-  const data: { name?: string; color?: string | null } = {};
+  const data: { name?: string; color?: string | null; type?: string } = {};
   if (name !== undefined) data.name = name.trim();
   if (color !== undefined) data.color = color || null;
+  if (type !== undefined) data.type = type;
 
   const category = await prisma.userCategory.update({
     where: { id: params.id },

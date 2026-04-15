@@ -26,7 +26,14 @@ interface EditState {
   id: string;
   name: string;
   color: string;
+  type: string;
 }
+
+const CAT_TYPES = [
+  { value: "expense", label: "Gasto",  color: "text-red-400",     bg: "bg-red-400/10 border-red-400/40" },
+  { value: "income",  label: "Ingreso", color: "text-emerald-400", bg: "bg-emerald-400/10 border-emerald-400/40" },
+  { value: "both",    label: "Ambos",  color: "text-muted-foreground", bg: "bg-muted/60 border-border" },
+] as const;
 
 export default function CategoriesPage() {
   const { data: categories = [], isLoading } = useUserCategories();
@@ -39,6 +46,7 @@ export default function CategoriesPage() {
   // Top-level create form
   const [newCatName, setNewCatName] = useState("");
   const [newCatColor, setNewCatColor] = useState(PRESET_COLORS[5]);
+  const [newCatType, setNewCatType] = useState<string>("expense");
   const [showNewCatForm, setShowNewCatForm] = useState(false);
 
   // Subcategory create form
@@ -54,8 +62,9 @@ export default function CategoriesPage() {
   async function handleCreateCategory() {
     const name = newCatName.trim();
     if (!name) return;
-    await createCategory.mutateAsync({ name, color: newCatColor });
+    await createCategory.mutateAsync({ name, color: newCatColor, type: newCatType });
     setNewCatName("");
+    setNewCatType("expense");
     setShowNewCatForm(false);
   }
 
@@ -74,6 +83,7 @@ export default function CategoriesPage() {
       id: editingCat.id,
       name: editingCat.name.trim(),
       color: editingCat.color,
+      type: editingCat.type,
     });
     setEditingCat(null);
   }
@@ -142,48 +152,67 @@ export default function CategoriesPage() {
                   >
                     {isEditing ? (
                       <>
-                        {/* Color picker */}
-                        <div className="flex gap-1 flex-wrap w-32">
-                          {PRESET_COLORS.map((c) => (
-                            <button
-                              key={c}
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); setEditingCat((prev) => prev ? { ...prev, color: c } : prev); }}
-                              className={cn(
-                                "h-4 w-4 rounded-full border-2 transition-transform",
-                                editingCat.color === c ? "border-white scale-110" : "border-transparent"
-                              )}
-                              style={{ background: c }}
+                        <div className="flex-1 flex flex-col gap-2" onClick={e => e.stopPropagation()}>
+                          {/* Type selector */}
+                          <div className="flex gap-1">
+                            {CAT_TYPES.map(t => (
+                              <button
+                                key={t.value}
+                                type="button"
+                                onClick={() => setEditingCat(prev => prev ? { ...prev, type: t.value } : prev)}
+                                className={cn(
+                                  "flex-1 rounded border px-1.5 py-1 text-[11px] font-semibold transition-all",
+                                  editingCat.type === t.value ? `${t.bg} ${t.color}` : "border-border text-muted-foreground hover:text-foreground"
+                                )}
+                              >
+                                {t.label}
+                              </button>
+                            ))}
+                          </div>
+                          {/* Color + name row */}
+                          <div className="flex items-center gap-2">
+                            <div className="flex gap-1 flex-wrap w-28">
+                              {PRESET_COLORS.map((c) => (
+                                <button
+                                  key={c}
+                                  type="button"
+                                  onClick={() => setEditingCat((prev) => prev ? { ...prev, color: c } : prev)}
+                                  className={cn(
+                                    "h-4 w-4 rounded-full border-2 transition-transform",
+                                    editingCat.color === c ? "border-white scale-110" : "border-transparent"
+                                  )}
+                                  style={{ background: c }}
+                                />
+                              ))}
+                            </div>
+                            <Input
+                              value={editingCat.name}
+                              onChange={(e) => setEditingCat((prev) => prev ? { ...prev, name: e.target.value } : prev)}
+                              className="h-7 text-sm flex-1"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleSaveCategory();
+                                if (e.key === "Escape") setEditingCat(null);
+                              }}
                             />
-                          ))}
+                            <button
+                              type="button"
+                              onClick={handleSaveCategory}
+                              className="p-1 text-emerald-400 hover:text-emerald-300 transition-colors"
+                              title="Guardar"
+                            >
+                              <Check className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingCat(null)}
+                              className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+                              title="Cancelar"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
                         </div>
-                        <Input
-                          value={editingCat.name}
-                          onChange={(e) => setEditingCat((prev) => prev ? { ...prev, name: e.target.value } : prev)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="h-7 text-sm flex-1"
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleSaveCategory();
-                            if (e.key === "Escape") setEditingCat(null);
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); handleSaveCategory(); }}
-                          className="p-1 text-emerald-400 hover:text-emerald-300 transition-colors"
-                          title="Guardar"
-                        >
-                          <Check className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setEditingCat(null); }}
-                          className="p-1 text-muted-foreground hover:text-foreground transition-colors"
-                          title="Cancelar"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
                       </>
                     ) : (
                       <>
@@ -192,6 +221,15 @@ export default function CategoriesPage() {
                           style={{ background: cat.color ?? "#6366f1" }}
                         />
                         <span className="flex-1 text-sm font-medium truncate">{cat.name}</span>
+                        {(() => {
+                          const t = CAT_TYPES.find(x => x.value === (cat.type ?? "both"));
+                          if (!t || t.value === "both") return null;
+                          return (
+                            <span className={cn("text-[9px] font-semibold rounded-full px-1.5 py-0.5 border", t.bg, t.color)}>
+                              {t.label}
+                            </span>
+                          );
+                        })()}
                         {(cat.children?.length ?? 0) > 0 && (
                           <Badge variant="secondary" className="text-[10px] ml-1">
                             {cat.children.length}
@@ -202,7 +240,7 @@ export default function CategoriesPage() {
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setEditingCat({ id: cat.id, name: cat.name, color: cat.color ?? PRESET_COLORS[5] });
+                              setEditingCat({ id: cat.id, name: cat.name, color: cat.color ?? PRESET_COLORS[5], type: cat.type ?? "both" });
                             }}
                             className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
                             title="Editar"
@@ -233,6 +271,22 @@ export default function CategoriesPage() {
               {/* New category form */}
               {showNewCatForm ? (
                 <div className="mt-2 space-y-2 rounded-lg border border-border p-3">
+                  {/* Type selector */}
+                  <div className="flex gap-1.5">
+                    {CAT_TYPES.map(t => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => setNewCatType(t.value)}
+                        className={cn(
+                          "flex-1 rounded-lg border px-2 py-1.5 text-xs font-semibold transition-all",
+                          newCatType === t.value ? `${t.bg} ${t.color}` : "border-border text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
                   <div className="flex flex-wrap gap-1">
                     {PRESET_COLORS.map((c) => (
                       <button
@@ -353,7 +407,7 @@ export default function CategoriesPage() {
                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             type="button"
-                            onClick={() => setEditingSub({ id: sub.id, name: sub.name, color: "" })}
+                            onClick={() => setEditingSub({ id: sub.id, name: sub.name, color: "", type: "both" })}
                             className="p-1 text-muted-foreground hover:text-foreground rounded transition-colors"
                             title="Editar"
                           >

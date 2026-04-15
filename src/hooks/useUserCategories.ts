@@ -5,6 +5,7 @@ export interface UserCategory {
   name: string;
   parentId: string | null;
   color: string | null;
+  type: string;  // "expense" | "income" | "both"
   createdAt: string;
   children: UserCategory[];
 }
@@ -23,7 +24,7 @@ export function useUserCategories() {
 export function useCreateUserCategory() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (data: { name: string; parentId?: string; color?: string }) => {
+    mutationFn: async (data: { name: string; parentId?: string; color?: string; type?: string }) => {
       const res = await fetch("/api/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -38,7 +39,7 @@ export function useCreateUserCategory() {
 export function useUpdateUserCategory() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...data }: { id: string; name?: string; color?: string }) => {
+    mutationFn: async ({ id, ...data }: { id: string; name?: string; color?: string; type?: string }) => {
       const res = await fetch(`/api/categories/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

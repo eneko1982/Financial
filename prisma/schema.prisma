@@ -61,6 +61,7 @@ model UserCategory {
   parent    UserCategory?  @relation("tree", fields: [parentId], references: [id], onDelete: Cascade)
   children  UserCategory[] @relation("tree")
   color     String?
+  type      String         @default("both")  // "expense" | "income" | "both" — top-level only
   createdAt DateTime       @default(now())
 
   @@unique([name, parentId])

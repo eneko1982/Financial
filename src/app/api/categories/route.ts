@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { name, parentId, color } = body as { name: string; parentId?: string; color?: string };
+  const { name, parentId, color, type } = body as { name: string; parentId?: string; color?: string; type?: string };
 
   if (!name?.trim()) {
     return NextResponse.json({ data: null, error: "name is required" }, { status: 400 });
@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
       name: name.trim(),
       parentId: parentId ?? null,
       color: color ?? null,
+      type: parentId ? "both" : (type ?? "both"),
     },
   });
   return NextResponse.json({ data: category, error: null }, { status: 201 });

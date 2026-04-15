@@ -82,6 +82,15 @@ export function AddTransactionSheet({ open, onClose, editTx }: Props) {
   const pickerCatObj = userCategories.find(c => c.name === pickerCategory);
   const pickerSubOptions = pickerCatObj?.children ?? [];
 
+  // Sort categories: matching type first, "both" second, opposite type last
+  const txCatType = type === "income" ? "income" : "expense";
+  const sortedCategories = [...userCategories].sort((a, b) => {
+    const rank = (t: string) => t === txCatType ? 0 : t === "both" ? 1 : 2;
+    return rank(a.type ?? "both") - rank(b.type ?? "both");
+  });
+  // First category that is NOT the matching type (used to show separator)
+  const separatorIdx = sortedCategories.findIndex(c => (c.type ?? "both") !== txCatType && (c.type ?? "both") !== "both");
+
   function openCategoryPicker() {
     setPickerCategory(category);
     setPickerSubcategory(subcategory);
@@ -341,27 +350,42 @@ export function AddTransactionSheet({ open, onClose, editTx }: Props) {
                   <span className="text-center leading-tight">Sin categoría</span>
                 </button>
 
-                {userCategories.map(cat => (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => { setPickerCategory(cat.name); setPickerSubcategory(""); }}
-                    className={cn(
-                      "flex flex-col items-center gap-1.5 rounded-xl border p-3 text-xs font-medium transition-all",
-                      pickerCategory === cat.name
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border bg-card text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
-                    )}
-                  >
-                    <span
-                      className="h-6 w-6 rounded-full flex items-center justify-center"
-                      style={{ background: (cat.color ?? "#6366f1") + "33" }}
-                    >
-                      <span className="h-3 w-3 rounded-full" style={{ background: cat.color ?? "#6366f1" }} />
-                    </span>
-                    <span className="text-center leading-tight line-clamp-2">{cat.name}</span>
-                  </button>
-                ))}
+                {sortedCategories.map((cat, idx) => {
+                  const isOpposite = (cat.type ?? "both") !== txCatType && (cat.type ?? "both") !== "both";
+                  const showSep = separatorIdx > 0 && idx === separatorIdx;
+                  return (
+                    <>
+                      {showSep && (
+                        <div key="sep" className="col-span-3 flex items-center gap-2 py-1">
+                          <div className="flex-1 h-px bg-border" />
+                          <span className="text-[10px] text-muted-foreground/60 font-medium">Otros</span>
+                          <div className="flex-1 h-px bg-border" />
+                        </div>
+                      )}
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => { setPickerCategory(cat.name); setPickerSubcategory(""); }}
+                        className={cn(
+                          "flex flex-col items-center gap-1.5 rounded-xl border p-3 text-xs font-medium transition-all",
+                          pickerCategory === cat.name
+                            ? "border-primary bg-primary/10 text-primary"
+                            : isOpposite
+                              ? "border-border bg-card/50 text-muted-foreground/60 hover:text-muted-foreground"
+                              : "border-border bg-card text-muted-foreground hover:border-muted-foreground/40 hover:text-foreground"
+                        )}
+                      >
+                        <span
+                          className="h-6 w-6 rounded-full flex items-center justify-center"
+                          style={{ background: (cat.color ?? "#6366f1") + (isOpposite ? "22" : "33") }}
+                        >
+                          <span className="h-3 w-3 rounded-full" style={{ background: cat.color ?? "#6366f1", opacity: isOpposite ? 0.5 : 1 }} />
+                        </span>
+                        <span className="text-center leading-tight line-clamp-2">{cat.name}</span>
+                      </button>
+                    </>
+                  );
+                })}
               </div>
 
               {/* Subcategory pills — shown when selected category has children */}
