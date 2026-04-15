@@ -26,6 +26,7 @@ interface TransactionFilters {
   search?: string;
   page?: number;
   limit?: number;
+  editedByUser?: boolean;
 }
 
 export function useTransactions(filters: TransactionFilters = {}) {
@@ -38,6 +39,7 @@ export function useTransactions(filters: TransactionFilters = {}) {
   if (filters.search) params.set("search", filters.search);
   if (filters.page) params.set("page", String(filters.page));
   if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.editedByUser !== undefined) params.set("editedByUser", String(filters.editedByUser));
 
   return useQuery({
     queryKey: ["transactions", filters],

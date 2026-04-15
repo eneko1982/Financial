@@ -138,11 +138,19 @@ export function CategoryEditor({
         title="Editar etiquetas"
       >
         <div className="flex items-center gap-1">
-          {currentCategory ? (
-            <Badge variant="secondary" className="text-[10px] cursor-pointer">
-              {currentCategory}
-            </Badge>
-          ) : (
+          {currentCategory ? (() => {
+            const catObj = userCategories.find(c => c.name === currentCategory);
+            const color = catObj?.color;
+            return (
+              <Badge
+                variant="secondary"
+                className="text-[10px] cursor-pointer"
+                style={color ? { backgroundColor: `${color}25`, color, borderColor: `${color}50` } : undefined}
+              >
+                {currentCategory}
+              </Badge>
+            );
+          })() : (
             <span className="text-[10px] text-muted-foreground/60 hover:text-muted-foreground border border-dashed border-muted-foreground/30 rounded px-1.5 py-0.5 cursor-pointer">
               + categoría
             </span>

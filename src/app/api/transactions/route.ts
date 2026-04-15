@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get("search");
   const page = parseInt(searchParams.get("page") ?? "1");
   const limit = parseInt(searchParams.get("limit") ?? "50");
+  const editedByUser = searchParams.get("editedByUser");
 
   const where: Record<string, unknown> = {};
   if (accountId) where.accountId = accountId;
@@ -25,6 +26,8 @@ export async function GET(req: NextRequest) {
   if (search) {
     where.description = { contains: search };
   }
+  if (editedByUser === "false") where.editedByUser = false;
+  if (editedByUser === "true") where.editedByUser = true;
 
   const [total, transactions] = await Promise.all([
     prisma.transaction.count({ where }),

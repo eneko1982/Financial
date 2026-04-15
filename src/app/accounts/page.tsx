@@ -30,6 +30,7 @@ export default function AccountsPage() {
   const [category, setCategory] = useState("");
   const [subcategory, setSubcategory] = useState("");
   const [page, setPage] = useState(1);
+  const [onlyUnedited, setOnlyUnedited] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editAccount, setEditAccount] = useState<{ id: string; name: string; bank: string; type: string } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -41,6 +42,7 @@ export default function AccountsPage() {
     search: search || undefined,
     category: category || undefined,
     subcategory: subcategory || undefined,
+    editedByUser: onlyUnedited ? false : undefined,
     page,
     limit: 30,
   });
@@ -146,6 +148,15 @@ export default function AccountsPage() {
               </SelectContent>
             </Select>
           )}
+          <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <input
+              type="checkbox"
+              checked={onlyUnedited}
+              onChange={(e) => { setOnlyUnedited(e.target.checked); setPage(1); }}
+              className="h-4 w-4 rounded border-border accent-primary cursor-pointer"
+            />
+            Solo sin editar
+          </label>
           <Button
             variant="outline"
             size="sm"
