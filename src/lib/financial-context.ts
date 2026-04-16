@@ -3,6 +3,7 @@ import { format, startOfMonth, endOfMonth, subMonths, startOfYear } from "date-f
 import { es } from "date-fns/locale";
 import type { FinancialContext } from "@/types/financial";
 import { calcSavingsRate, calcTotalReturn, calcGoalProgress, isInternalTransfer } from "./utils/calculations";
+import { getUsdEurRate } from "./exchange-rate";
 
 // ── In-memory cache (TTL: 5 minutes) ────────────────────────────────────────
 // Safe for single-user personal finance app.
@@ -86,9 +87,20 @@ export async function buildFinancialContext(): Promise<FinancialContext> {
     .reduce((s, a) => s + a.balance, 0);
 
   // ── Investment portfolio ────────────────────────────────────────────────────
-  const positions = await prisma.investmentPosition.findMany({ include: { account: true } });
-  const portfolioCost  = positions.reduce((s, p) => s + p.shares * p.averageCost, 0);
-  const portfolioValue = positions.reduce((s, p) => s + p.shares * (p.currentPrice ?? p.averageCost), 0);
+  const [positions, usdEurRate] = await Promise.all([
+    prisma.investmentPosition.findMany({ include: { account: true } }),
+    getUsdEurRate(),
+  ]);
+
+  // Convert all prices to EUR using the live exchange rate
+  const portfolioCost = positions.reduce((s, p) => {
+    const fxRate = p.currency === "USD" ? usdEurRate : 1;
+    return s + p.shares * p.averageCost * fxRate;
+  }, 0);
+  const portfolioValue = positions.reduce((s, p) => {
+    const fxRate = p.currency === "USD" ? usdEurRate : 1;
+    return s + p.shares * (p.currentPrice ?? p.averageCost) * fxRate;
+  }, 0);
   const totalReturnEur = portfolioValue - portfolioCost;
   const totalReturn    = calcTotalReturn(portfolioValue, portfolioCost);
 
@@ -147,11 +159,12 @@ export async function buildFinancialContext(): Promise<FinancialContext> {
       percentOfIncome: income > 0 ? (amount / income) * 100 : 0,
     }));
 
-  // Top investment positions
+  // Top investment positions (all values in EUR)
   const topPositions = positions
     .map((p) => {
-      const value = p.shares * (p.currentPrice ?? p.averageCost);
-      const cost  = p.shares * p.averageCost;
+      const fxRate = p.currency === "USD" ? usdEurRate : 1;
+      const value = p.shares * (p.currentPrice ?? p.averageCost) * fxRate;
+      const cost  = p.shares * p.averageCost * fxRate;
       return {
         ticker: p.ticker,
         name: p.name,

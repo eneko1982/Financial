@@ -66,9 +66,23 @@ export function useInvestmentPositions() {
     queryFn: async () => {
       const res = await fetch("/api/investments/positions");
       const json = await res.json();
-      return { data: json.data, totalValue: json.meta?.totalValue ?? 0 } as {
-        data: Array<{ id: string; ticker: string; name: string; shares: number; averageCost: number; currentPrice: number | null; currentValue: number; costBasis: number; pnlEur: number; pnlPct: number; weight: number; assetClass: string | null; account: { name: string; broker: string } }>;
+      return {
+        data: json.data,
+        totalValue: json.meta?.totalValue ?? 0,
+        usdEurRate: json.meta?.usdEurRate ?? null,
+      } as {
+        data: Array<{
+          id: string; ticker: string; name: string; shares: number;
+          averageCost: number; currentPrice: number | null;
+          averageCostNative: number; currentPriceNative: number | null;
+          currency: string;
+          currentValue: number; costBasis: number; pnlEur: number; pnlPct: number;
+          weight: number; assetClass: string | null;
+          usdEurRate: number | null;
+          account: { name: string; broker: string };
+        }>;
         totalValue: number;
+        usdEurRate: number | null;
       };
     },
   });

@@ -29,6 +29,8 @@ export default function InvestmentsPage() {
   const { data: posData, isLoading: posLoading } = useInvestmentPositions();
   const positions = posData?.data ?? [];
   const totalValue = posData?.totalValue ?? 0;
+  const usdEurRate = posData?.usdEurRate ?? null;
+  const hasUsdPositions = positions.some(p => p.currency === "USD");
   const totalCost = positions.reduce((s, p) => s + p.costBasis, 0);
   const totalPnl = totalValue - totalCost;
   const totalPnlPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
@@ -144,6 +146,17 @@ export default function InvestmentsPage() {
             </p>
           </div>
         </div>
+
+        {/* USD/EUR rate badge — only shown when there are USD positions */}
+        {hasUsdPositions && usdEurRate && (
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 rounded-full bg-amber-400/15 border border-amber-400/30 px-3 py-1">
+              <span className="text-[10px] font-semibold text-amber-300 uppercase tracking-wider">USD/EUR</span>
+              <span className="text-[11px] font-bold text-amber-200 tabular-nums">{usdEurRate.toFixed(4)}</span>
+            </div>
+            <span className="text-[10px] text-white/40">Valores en USD convertidos a €</span>
+          </div>
+        )}
       </div>
 
       <div className="px-4 py-4 space-y-5">
@@ -265,6 +278,9 @@ export default function InvestmentsPage() {
                             style={{ background: color + "22", color }}>
                             {ASSET_LABELS[p.assetClass ?? "other"] ?? p.assetClass}
                           </span>
+                          {p.currency === "USD" && (
+                            <span className="text-[9px] font-bold rounded-full px-1.5 py-px bg-amber-400/15 text-amber-400 border border-amber-400/30">USD</span>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground truncate leading-tight">{p.name}</p>
                         <p className="text-[11px] text-muted-foreground/60 mt-0.5">
@@ -356,7 +372,14 @@ export default function InvestmentsPage() {
                       ))
                     : filteredPositions.map((p) => (
                     <tr key={p.id} className="border-t border-border hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3 font-mono font-bold">{p.ticker}</td>
+                      <td className="px-4 py-3 font-mono font-bold">
+                        <div className="flex items-center gap-1.5">
+                          {p.ticker}
+                          {p.currency === "USD" && (
+                            <span className="text-[9px] font-bold rounded-full px-1.5 py-px bg-amber-400/15 text-amber-400 border border-amber-400/30">USD</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 max-w-[180px] truncate text-muted-foreground">{p.name}</td>
                       <td className="px-4 py-3">
                         <Badge variant="secondary" className="text-[10px]" style={{ background: `${ASSET_COLORS[p.assetClass ?? "other"]}20`, color: ASSET_COLORS[p.assetClass ?? "other"] }}>{p.assetClass ?? "other"}</Badge>
@@ -414,7 +437,7 @@ export default function InvestmentsPage() {
 
 function AddPositionDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ ticker: "", name: "", shares: "", averageCost: "", currentPrice: "", assetClass: "etf" });
+  const [form, setForm] = useState({ ticker: "", name: "", shares: "", averageCost: "", currentPrice: "", assetClass: "etf", currency: "EUR" });
   const [accountId, setAccountId] = useState("");
   const [accounts, setAccounts] = useState<{ id: string; name: string; broker: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -427,18 +450,29 @@ function AddPositionDialog({ open, onClose }: { open: boolean; onClose: () => vo
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    // Create investment account if none
     let accId = accountId;
     if (!accId) {
       const r = await fetch("/api/investments/accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: "Mi Broker", broker: "Otro", currency: "EUR" }) });
       const d = await r.json();
       accId = d.data.id;
     }
-    await fetch("/api/investments/positions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...form, shares: parseFloat(form.shares), averageCost: parseFloat(form.averageCost), currentPrice: form.currentPrice ? parseFloat(form.currentPrice) : null, accountId: accId }) });
+    await fetch("/api/investments/positions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...form,
+        shares: parseFloat(form.shares),
+        averageCost: parseFloat(form.averageCost),
+        currentPrice: form.currentPrice ? parseFloat(form.currentPrice) : null,
+        accountId: accId,
+      }),
+    });
     qc.invalidateQueries({ queryKey: ["investments"] });
     setSaving(false);
     onClose();
   }
+
+  const currSymbol = form.currency === "USD" ? "$" : "€";
 
   return (
     <Dialog open={open} onOpenChange={o => { if (o) handleOpen(); else onClose(); }}>
@@ -468,17 +502,43 @@ function AddPositionDialog({ open, onClose }: { open: boolean; onClose: () => vo
             <label className="text-sm font-medium">Nombre</label>
             <Input placeholder="Vanguard FTSE All-World" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
           </div>
+
+          {/* Currency selector */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Divisa de cotización</label>
+            <div className="flex gap-2">
+              {["EUR", "USD"].map(cur => (
+                <button
+                  key={cur}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, currency: cur }))}
+                  className={cn(
+                    "flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors",
+                    form.currency === cur
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {cur === "EUR" ? "€ Euro" : "$ Dólar"}
+                </button>
+              ))}
+            </div>
+            {form.currency === "USD" && (
+              <p className="text-[11px] text-amber-400/80">Los precios en USD se convierten a € automáticamente usando el tipo de cambio real.</p>
+            )}
+          </div>
+
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Acciones</label>
               <Input type="number" step="0.0001" placeholder="10" value={form.shares} onChange={e => setForm(f => ({ ...f, shares: e.target.value }))} required />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Coste medio €</label>
+              <label className="text-sm font-medium">Coste medio {currSymbol}</label>
               <Input type="number" step="0.01" placeholder="100.00" value={form.averageCost} onChange={e => setForm(f => ({ ...f, averageCost: e.target.value }))} required />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Precio actual €</label>
+              <label className="text-sm font-medium">Precio actual {currSymbol}</label>
               <Input type="number" step="0.01" placeholder="110.00" value={form.currentPrice} onChange={e => setForm(f => ({ ...f, currentPrice: e.target.value }))} />
             </div>
           </div>
@@ -492,14 +552,26 @@ function AddPositionDialog({ open, onClose }: { open: boolean; onClose: () => vo
   );
 }
 
-function EditPositionDialog({ position, onClose }: { position: { id: string; ticker: string; name: string; shares: number; averageCost: number; currentPrice: number | null; assetClass: string | null }; onClose: () => void }) {
+function EditPositionDialog({ position, onClose }: {
+  position: {
+    id: string; ticker: string; name: string; shares: number;
+    averageCost: number; currentPrice: number | null;
+    averageCostNative: number; currentPriceNative: number | null;
+    currency: string; assetClass: string | null;
+  };
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
   const [form, setForm] = useState({
     name: position.name,
     shares: String(position.shares),
-    averageCost: String(position.averageCost),
-    currentPrice: position.currentPrice != null ? String(position.currentPrice) : "",
+    // Use native currency prices (not EUR-converted) for editing
+    averageCost: String(position.averageCostNative ?? position.averageCost),
+    currentPrice: (position.currentPriceNative ?? position.currentPrice) != null
+      ? String(position.currentPriceNative ?? position.currentPrice)
+      : "",
     assetClass: position.assetClass ?? "stocks",
+    currency: position.currency ?? "EUR",
   });
   const [saving, setSaving] = useState(false);
 
@@ -515,12 +587,15 @@ function EditPositionDialog({ position, onClose }: { position: { id: string; tic
         averageCost: parseFloat(form.averageCost),
         currentPrice: form.currentPrice ? parseFloat(form.currentPrice) : null,
         assetClass: form.assetClass,
+        currency: form.currency,
       }),
     });
     qc.invalidateQueries({ queryKey: ["investments"] });
     setSaving(false);
     onClose();
   }
+
+  const currSymbol = form.currency === "USD" ? "$" : "€";
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -548,17 +623,43 @@ function EditPositionDialog({ position, onClose }: { position: { id: string; tic
               </Select>
             </div>
           </div>
+
+          {/* Currency selector */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">Divisa de cotización</label>
+            <div className="flex gap-2">
+              {["EUR", "USD"].map(cur => (
+                <button
+                  key={cur}
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, currency: cur }))}
+                  className={cn(
+                    "flex-1 rounded-lg border py-2 text-sm font-semibold transition-colors",
+                    form.currency === cur
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {cur === "EUR" ? "€ Euro" : "$ Dólar"}
+                </button>
+              ))}
+            </div>
+            {form.currency === "USD" && (
+              <p className="text-[11px] text-amber-400/80">Los precios en USD se convierten a € automáticamente usando el tipo de cambio real.</p>
+            )}
+          </div>
+
           <div className="grid grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <label className="text-sm font-medium">Acciones</label>
               <Input type="number" step="0.0001" value={form.shares} onChange={e => setForm(f => ({ ...f, shares: e.target.value }))} required />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Coste medio €</label>
+              <label className="text-sm font-medium">Coste medio {currSymbol}</label>
               <Input type="number" step="0.01" value={form.averageCost} onChange={e => setForm(f => ({ ...f, averageCost: e.target.value }))} required />
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Precio actual €</label>
+              <label className="text-sm font-medium">Precio actual {currSymbol}</label>
               <Input type="number" step="0.01" placeholder="—" value={form.currentPrice} onChange={e => setForm(f => ({ ...f, currentPrice: e.target.value }))} />
             </div>
           </div>
