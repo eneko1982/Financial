@@ -42,10 +42,11 @@ export default function MovimientosPage() {
   const [deleteTxPending, setDeleteTxPending] = useState(false);
   const qc = useQueryClient();
 
-  // Date range derived from selectedMonth
+  // Date range derived from selectedMonth (timezone-safe: use getDate() not toISOString)
   const [ymYear, ymMonth] = selectedMonth.split("-").map(Number);
   const dateFrom = `${selectedMonth}-01`;
-  const dateTo = new Date(ymYear, ymMonth, 0).toISOString().slice(0, 10);
+  const lastDay = new Date(ymYear, ymMonth, 0).getDate();
+  const dateTo = `${selectedMonth}-${String(lastDay).padStart(2, "0")}`;
 
   const { data: txData, isLoading } = useTransactions({
     accountId: accountId || undefined,

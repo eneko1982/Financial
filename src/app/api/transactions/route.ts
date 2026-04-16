@@ -20,8 +20,10 @@ export async function GET(req: NextRequest) {
   if (subcategory) where.subcategory = subcategory;
   if (dateFrom || dateTo) {
     where.date = {
-      ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
-      ...(dateTo ? { lte: new Date(dateTo) } : {}),
+      // Use start-of-day UTC for dateFrom and end-of-day UTC for dateTo so that
+      // transactions stored at any time within a day are always included.
+      ...(dateFrom ? { gte: new Date(dateFrom + "T00:00:00.000Z") } : {}),
+      ...(dateTo   ? { lte: new Date(dateTo   + "T23:59:59.999Z") } : {}),
     };
   }
   if (search) {
