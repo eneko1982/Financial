@@ -12,7 +12,10 @@ const CreateAccountSchema = z.object({
   initialBalance: z.number().optional(),
 });
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const { searchParams } = req.nextUrl;
+  const asOf = searchParams.get("asOf"); // "YYYY-MM-DD" for historical balance, null for current
+
   const accounts = await prisma.account.findMany({
     where: { isActive: true },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
@@ -74,6 +77,47 @@ export async function GET() {
     }
     return { ...acc, balance };
   });
+
+  // ── Historical mode: adjust balances point-in-time ──────────────────────
+  if (asOf) {
+    const asOfDate = new Date(asOf + "T23:59:59.999Z");
+
+    // Accounts with a balance source: historicalBalance = currentBalance - sum(future txs)
+    const hasBalanceSourceIds = accountIds.filter(id => snapshotMap.has(id) || lastTxBalMap.has(id));
+    // Accounts without a balance source: historicalBalance = sum(txs up to asOf)
+    const noBalanceSourceIds = needsSum; // same set used for txSumMap above
+
+    const [futureTxSums, historicalTxSums] = await Promise.all([
+      hasBalanceSourceIds.length > 0
+        ? prisma.transaction.groupBy({
+            by: ["accountId"],
+            where: { accountId: { in: hasBalanceSourceIds }, date: { gt: asOfDate } },
+            _sum: { amount: true },
+          })
+        : Promise.resolve([]),
+      noBalanceSourceIds.length > 0
+        ? prisma.transaction.groupBy({
+            by: ["accountId"],
+            where: { accountId: { in: noBalanceSourceIds }, date: { lte: asOfDate } },
+            _sum: { amount: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const futureSumMap     = new Map(futureTxSums.map(s => [s.accountId, s._sum.amount ?? 0]));
+    const historicalSumMap = new Map(historicalTxSums.map(s => [s.accountId, s._sum.amount ?? 0]));
+
+    return NextResponse.json({
+      data: withBalance.map(a => {
+        const usedBalanceSource = snapshotMap.has(a.id) || lastTxBalMap.has(a.id);
+        const balance = usedBalanceSource
+          ? a.balance - (futureSumMap.get(a.id) ?? 0)
+          : historicalSumMap.get(a.id) ?? 0;
+        return { ...a, balance };
+      }),
+      error: null,
+    });
+  }
 
   return NextResponse.json({ data: withBalance, error: null });
 }

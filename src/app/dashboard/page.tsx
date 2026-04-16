@@ -43,15 +43,22 @@ function addMonth(ym: string, delta: number) {
 
 export default function InicioPage() {
   const { selectedMonth, setSelectedMonth, setEditTx } = useUIStore();
-  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
-  const { data: liabilityData = [] } = useLiabilities();
-  const { data: summary } = useSummary(selectedMonth);
-  const { data: posData } = useInvestmentPositions();
 
   // Date range for selected month
   const [ymYear, ymMonth] = selectedMonth.split("-").map(Number);
   const dateFrom = `${selectedMonth}-01`;
   const dateTo = new Date(ymYear, ymMonth, 0).toISOString().slice(0, 10);
+
+  // For past months use point-in-time balances (exclude future transactions)
+  const today = new Date();
+  const currentYM = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  const isCurrentMonth = selectedMonth >= currentYM;
+  const asOf = isCurrentMonth ? undefined : dateTo;
+
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts(asOf);
+  const { data: liabilityData = [] } = useLiabilities();
+  const { data: summary } = useSummary(selectedMonth);
+  const { data: posData } = useInvestmentPositions();
 
   const { data: txData } = useTransactions({ limit: 50, dateFrom, dateTo });
 

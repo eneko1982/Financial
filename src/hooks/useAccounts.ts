@@ -1,10 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-export function useAccounts() {
+export function useAccounts(asOf?: string) {
   return useQuery({
-    queryKey: ["accounts"],
+    queryKey: asOf ? ["accounts", "historical", asOf] : ["accounts"],
     queryFn: async () => {
-      const res = await fetch("/api/accounts");
+      const url = asOf ? `/api/accounts?asOf=${asOf}` : "/api/accounts";
+      const res = await fetch(url);
       const json = await res.json();
       return json.data as Array<{ id: string; name: string; bank: string; type: string; color: string | null; balance: number; currency: string; includeInNetWorth: boolean; sortOrder: number }>;
     },
