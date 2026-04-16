@@ -76,6 +76,7 @@ export function useInvestmentPositions() {
           averageCost: number; currentPrice: number | null;
           averageCostNative: number; currentPriceNative: number | null;
           currency: string;
+          country: string | null;
           currentValue: number; costBasis: number; pnlEur: number; pnlPct: number;
           weight: number; assetClass: string | null;
           usdEurRate: number | null;

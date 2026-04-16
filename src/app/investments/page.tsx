@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { useState, useMemo } from "react";
+import { PieChart, Pie, Cell, Sector, ResponsiveContainer } from "recharts";
 import { Header } from "@/components/layout/Header";
 import { useInvestmentPositions } from "@/hooks/useAnalytics";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,14 @@ const ASSET_COLORS: Record<string, string> = {
 const ASSET_LABELS: Record<string, string> = {
   stocks: "Acciones", etf: "ETF", bonds: "Bonos", crypto: "Cripto", cash: "Efectivo", other: "Otro",
 };
+const CHART_PALETTE = [
+  "#6366f1","#22d3ee","#a3e635","#fb923c","#f472b6",
+  "#34d399","#fbbf24","#60a5fa","#c084fc","#f87171",
+  "#2dd4bf","#e879f9","#4ade80","#38bdf8","#facc15",
+];
+type ChartView = "class" | "position" | "country";
+interface ChartEntry { key: string; label: string; value: number; pct: number; color: string; }
+const VIEW_LABELS: Record<ChartView, string> = { class: "Clase", position: "Posición", country: "País" };
 
 export default function InvestmentsPage() {
   const { data: posData, isLoading: posLoading } = useInvestmentPositions();
@@ -69,14 +77,6 @@ export default function InvestmentsPage() {
     if (sortKey !== col) return <ChevronsUpDown className="h-3 w-3 text-muted-foreground/50" />;
     return sortDir === "asc" ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />;
   }
-
-  const allocationData = Object.entries(
-    positions.reduce((acc, p) => {
-      const cls = p.assetClass ?? "other";
-      acc[cls] = (acc[cls] ?? 0) + p.currentValue;
-      return acc;
-    }, {} as Record<string, number>)
-  ).map(([name, value]) => ({ name, value }));
 
   const assetClasses = ["all", ...Array.from(new Set(positions.map(p => p.assetClass ?? "other")))];
 
@@ -161,54 +161,8 @@ export default function InvestmentsPage() {
 
       <div className="px-4 py-4 space-y-5">
 
-        {/* ── Allocation charts ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Asignación por clase</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {allocationData.length === 0 ? (
-                <p className="text-center text-sm text-muted-foreground py-6">Sin posiciones</p>
-              ) : (
-                <ResponsiveContainer width="100%" height={180}>
-                  <PieChart>
-                    <Pie data={allocationData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={30}>
-                      {allocationData.map((e, i) => <Cell key={i} fill={ASSET_COLORS[e.name] ?? "#6b7280"} />)}
-                    </Pie>
-                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 11 }} formatter={(v: number) => [formatCurrency(v)]} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} formatter={v => ASSET_LABELS[v] ?? v} />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Peso de posiciones</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2.5">
-              {positions.slice(0, 6).map((p) => (
-                <div key={p.id} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full" style={{ background: ASSET_COLORS[p.assetClass ?? "other"] }} />
-                      <span className="font-mono font-semibold">{p.ticker}</span>
-                    </div>
-                    <span className="text-muted-foreground tabular-nums">{p.weight.toFixed(1)}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${p.weight}%`, background: ASSET_COLORS[p.assetClass ?? "other"] }} />
-                  </div>
-                </div>
-              ))}
-              {positions.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">Sin posiciones</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        {/* ── Allocation chart ── */}
+        <AllocationChart positions={positions} totalValue={totalValue} />
 
         {/* ── Positions section ── */}
         <div>
@@ -435,9 +389,184 @@ export default function InvestmentsPage() {
   );
 }
 
+/* ─── Allocation chart ──────────────────────────────────────────────────── */
+
+type PositionForChart = {
+  id: string; ticker: string; assetClass: string | null;
+  country: string | null; currentValue: number;
+};
+
+function AllocationChart({ positions, totalValue }: { positions: PositionForChart[]; totalValue: number }) {
+  const [view, setView] = useState<ChartView>("class");
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+
+  const chartData = useMemo((): ChartEntry[] => {
+    if (totalValue === 0 || positions.length === 0) return [];
+
+    if (view === "class") {
+      const groups: Record<string, number> = {};
+      positions.forEach(p => { const k = p.assetClass ?? "other"; groups[k] = (groups[k] ?? 0) + p.currentValue; });
+      return Object.entries(groups)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, v]) => ({ key: k, label: ASSET_LABELS[k] ?? k, value: v, pct: (v / totalValue) * 100, color: ASSET_COLORS[k] ?? "#6b7280" }));
+    }
+
+    if (view === "position") {
+      return [...positions]
+        .sort((a, b) => b.currentValue - a.currentValue)
+        .map((p, i) => ({ key: p.id, label: p.ticker, value: p.currentValue, pct: (p.currentValue / totalValue) * 100, color: CHART_PALETTE[i % CHART_PALETTE.length] }));
+    }
+
+    // country
+    const groups: Record<string, number> = {};
+    positions.forEach(p => { const k = p.country?.trim() || "Sin región"; groups[k] = (groups[k] ?? 0) + p.currentValue; });
+    return Object.entries(groups)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k, v], i) => ({ key: k, label: k, value: v, pct: (v / totalValue) * 100, color: CHART_PALETTE[i % CHART_PALETTE.length] }));
+  }, [view, positions, totalValue]);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const renderActiveShape = (props: any) => {
+    const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent } = props;
+    return (
+      <g>
+        <Sector cx={cx} cy={cy} innerRadius={innerRadius} outerRadius={outerRadius + 9} startAngle={startAngle} endAngle={endAngle} fill={fill} />
+        <Sector cx={cx} cy={cy} innerRadius={outerRadius + 13} outerRadius={outerRadius + 17} startAngle={startAngle} endAngle={endAngle} fill={fill} opacity={0.45} />
+        <text x={cx} y={cy - 14} textAnchor="middle" fill="white" fontSize={13} fontWeight="700">{payload.label}</text>
+        <text x={cx} y={cy + 4}  textAnchor="middle" fill="#9ca3af" fontSize={11}>{formatCurrency(payload.value)}</text>
+        <text x={cx} y={cy + 20} textAnchor="middle" fill={fill} fontSize={13} fontWeight="700">{(percent * 100).toFixed(1)}%</text>
+      </g>
+    );
+  };
+
+  if (positions.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Asignación de cartera
+          </CardTitle>
+          {/* View toggle */}
+          <div className="flex rounded-lg border border-border overflow-hidden text-[11px] shrink-0">
+            {(["class", "position", "country"] as ChartView[]).map(v => (
+              <button
+                key={v}
+                onClick={() => { setView(v); setActiveIndex(null); }}
+                className={cn(
+                  "px-3 py-1.5 font-medium transition-colors",
+                  view === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                )}
+              >
+                {VIEW_LABELS[v]}
+              </button>
+            ))}
+          </div>
+        </div>
+      </CardHeader>
+
+      <CardContent className="pt-0">
+        <div className="flex flex-col sm:flex-row gap-4 items-start">
+
+          {/* ── Donut chart ── */}
+          <div className="relative w-full sm:w-[230px] shrink-0">
+            <ResponsiveContainer width="100%" height={230}>
+              <PieChart>
+                <Pie
+                  activeIndex={activeIndex ?? undefined}
+                  activeShape={renderActiveShape}
+                  data={chartData}
+                  cx="50%" cy="50%"
+                  innerRadius={70} outerRadius={98}
+                  dataKey="value"
+                  onMouseEnter={(_, i) => setActiveIndex(i)}
+                  onMouseLeave={() => setActiveIndex(null)}
+                  stroke="none"
+                  paddingAngle={chartData.length > 1 ? 2 : 0}
+                  animationBegin={0}
+                  animationDuration={500}
+                >
+                  {chartData.map((e, i) => (
+                    <Cell
+                      key={i}
+                      fill={e.color}
+                      style={{ filter: activeIndex === i ? `drop-shadow(0 0 8px ${e.color}90)` : "none", transition: "filter 0.2s" }}
+                    />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+
+            {/* Center overlay — shows when nothing is hovered */}
+            {activeIndex === null && (
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+                <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Total</p>
+                <p className="text-sm font-bold tabular-nums text-foreground">{formatCurrency(totalValue)}</p>
+                <p className="text-[10px] text-muted-foreground">{chartData.length} {view === "position" ? "posiciones" : "grupos"}</p>
+              </div>
+            )}
+          </div>
+
+          {/* ── Legend list ── */}
+          <div className="flex-1 min-w-0 w-full space-y-1.5 max-h-[230px] overflow-y-auto pr-1">
+            {chartData.map((e, i) => (
+              <div
+                key={e.key}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-xl px-3 py-2 transition-all cursor-default select-none",
+                  activeIndex === i
+                    ? "bg-muted/80 shadow-sm"
+                    : "hover:bg-muted/40"
+                )}
+                onMouseEnter={() => setActiveIndex(i)}
+                onMouseLeave={() => setActiveIndex(null)}
+              >
+                {/* Color dot with glow */}
+                <span
+                  className="h-3 w-3 rounded-full shrink-0 transition-transform"
+                  style={{
+                    background: e.color,
+                    boxShadow: activeIndex === i ? `0 0 8px ${e.color}80` : "none",
+                    transform: activeIndex === i ? "scale(1.3)" : "scale(1)",
+                  }}
+                />
+
+                {/* Label + bars */}
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold truncate">{e.label}</span>
+                    <span className="text-xs font-bold tabular-nums shrink-0" style={{ color: e.color }}>
+                      {e.pct.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 rounded-full bg-muted/60 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${e.pct}%`, background: `linear-gradient(90deg, ${e.color}cc, ${e.color})` }}
+                      />
+                    </div>
+                    <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 min-w-[58px] text-right">
+                      {formatCurrency(e.value)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/* ─── Position dialogs ──────────────────────────────────────────────────── */
+
 function AddPositionDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
-  const [form, setForm] = useState({ ticker: "", name: "", shares: "", averageCost: "", currentPrice: "", assetClass: "etf", currency: "EUR" });
+  const [form, setForm] = useState({ ticker: "", name: "", shares: "", averageCost: "", currentPrice: "", assetClass: "etf", currency: "EUR", country: "" });
   const [accountId, setAccountId] = useState("");
   const [accounts, setAccounts] = useState<{ id: string; name: string; broker: string }[]>([]);
   const [saving, setSaving] = useState(false);
@@ -542,6 +671,10 @@ function AddPositionDialog({ open, onClose }: { open: boolean; onClose: () => vo
               <Input type="number" step="0.01" placeholder="110.00" value={form.currentPrice} onChange={e => setForm(f => ({ ...f, currentPrice: e.target.value }))} />
             </div>
           </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">País / Región <span className="text-muted-foreground font-normal">(opcional, para el gráfico)</span></label>
+            <Input placeholder="USA, Europa, Global, España..." value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} />
+          </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Guardando..." : "Añadir posición"}</Button>
@@ -557,7 +690,7 @@ function EditPositionDialog({ position, onClose }: {
     id: string; ticker: string; name: string; shares: number;
     averageCost: number; currentPrice: number | null;
     averageCostNative: number; currentPriceNative: number | null;
-    currency: string; assetClass: string | null;
+    currency: string; assetClass: string | null; country: string | null;
   };
   onClose: () => void;
 }) {
@@ -565,13 +698,13 @@ function EditPositionDialog({ position, onClose }: {
   const [form, setForm] = useState({
     name: position.name,
     shares: String(position.shares),
-    // Use native currency prices (not EUR-converted) for editing
     averageCost: String(position.averageCostNative ?? position.averageCost),
     currentPrice: (position.currentPriceNative ?? position.currentPrice) != null
       ? String(position.currentPriceNative ?? position.currentPrice)
       : "",
     assetClass: position.assetClass ?? "stocks",
     currency: position.currency ?? "EUR",
+    country: position.country ?? "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -588,6 +721,7 @@ function EditPositionDialog({ position, onClose }: {
         currentPrice: form.currentPrice ? parseFloat(form.currentPrice) : null,
         assetClass: form.assetClass,
         currency: form.currency,
+        country: form.country,
       }),
     });
     qc.invalidateQueries({ queryKey: ["investments"] });
@@ -662,6 +796,10 @@ function EditPositionDialog({ position, onClose }: {
               <label className="text-sm font-medium">Precio actual {currSymbol}</label>
               <Input type="number" step="0.01" placeholder="—" value={form.currentPrice} onChange={e => setForm(f => ({ ...f, currentPrice: e.target.value }))} />
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">País / Región <span className="text-muted-foreground font-normal">(opcional, para el gráfico)</span></label>
+            <Input placeholder="USA, Europa, Global, España..." value={form.country} onChange={e => setForm(f => ({ ...f, country: e.target.value }))} />
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>

@@ -100,6 +100,7 @@ model InvestmentPosition {
   currency     String            @default("EUR")
   assetClass   String?
   sector       String?
+  country      String?
   lastUpdated  DateTime?
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
