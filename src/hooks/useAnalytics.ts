@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import type { KPIData, NetWorthPoint, CashFlowPoint, CategorySpend } from "@/types/financial";
 
-export function useSummary() {
+export function useSummary(month?: string) {
   return useQuery({
-    queryKey: ["analytics", "summary"],
+    queryKey: ["analytics", "summary", month ?? "current"],
     queryFn: async () => {
-      const res = await fetch("/api/analytics/summary");
+      const url = month ? `/api/analytics/summary?month=${month}` : "/api/analytics/summary";
+      const res = await fetch(url);
       const json = await res.json();
       return json.data as KPIData;
     },

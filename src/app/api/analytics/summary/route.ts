@@ -1,14 +1,22 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { startOfMonth, endOfMonth, subMonths } from "date-fns";
+import { startOfMonth, endOfMonth, subMonths, parseISO } from "date-fns";
 import { calcSavingsRate, calcTotalReturn, isInternalTransfer } from "@/lib/utils/calculations";
 
-export async function GET() {
-  const now = new Date();
-  const monthStart = startOfMonth(now);
-  const monthEnd = endOfMonth(now);
-  const prevStart = startOfMonth(subMonths(now, 1));
-  const prevEnd = endOfMonth(subMonths(now, 1));
+export async function GET(req: NextRequest) {
+  const { searchParams } = req.nextUrl;
+  const monthParam = searchParams.get("month"); // "YYYY-MM" or null
+
+  // If a specific month is requested, build a date within that month;
+  // otherwise use the current date (always-current behaviour for KPI widgets).
+  const referenceDate = monthParam
+    ? parseISO(`${monthParam}-15`)
+    : new Date();
+
+  const monthStart = startOfMonth(referenceDate);
+  const monthEnd = endOfMonth(referenceDate);
+  const prevStart = startOfMonth(subMonths(referenceDate, 1));
+  const prevEnd = endOfMonth(subMonths(referenceDate, 1));
 
   // ── 1. Bank balances (date-aware: use whichever source is more recent) ────────
   const accounts = await prisma.account.findMany({ where: { isActive: true } });

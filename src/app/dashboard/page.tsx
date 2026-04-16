@@ -45,9 +45,15 @@ export default function InicioPage() {
   const { selectedMonth, setSelectedMonth, setEditTx } = useUIStore();
   const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
   const { data: liabilityData = [] } = useLiabilities();
-  const { data: summary } = useSummary();
-  const { data: txData } = useTransactions({ limit: 8 });
+  const { data: summary } = useSummary(selectedMonth);
   const { data: posData } = useInvestmentPositions();
+
+  // Date range for selected month
+  const [ymYear, ymMonth] = selectedMonth.split("-").map(Number);
+  const dateFrom = `${selectedMonth}-01`;
+  const dateTo = new Date(ymYear, ymMonth, 0).toISOString().slice(0, 10);
+
+  const { data: txData } = useTransactions({ limit: 50, dateFrom, dateTo });
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editAccount, setEditAccount] = useState<{ id: string; name: string; bank: string; type: string; includeInNetWorth: boolean } | null>(null);
@@ -68,7 +74,7 @@ export default function InicioPage() {
   const totalAssets = bankAssets + portfolioValue;
   const totalLiabilities = liabilityData.reduce((s, l) => s + l.balance, 0);
   const netWorth = totalAssets - totalLiabilities;
-  const recentTxs = txData?.data ?? [];
+  const recentTxs = (txData?.data ?? []).slice(0, 8);
 
   return (
     <div className="max-w-2xl mx-auto">
