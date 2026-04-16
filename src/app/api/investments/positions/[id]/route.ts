@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
   const body = await req.json();
-  const { shares, averageCost, currentPrice, name, assetClass } = body;
+  const { shares, averageCost, currentPrice, name, assetClass, currency } = body;
 
   const position = await prisma.investmentPosition.update({
     where: { id: params.id },
@@ -13,6 +13,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ...(currentPrice !== undefined && { currentPrice: currentPrice ? parseFloat(currentPrice) : null }),
       ...(name != null && { name }),
       ...(assetClass != null && { assetClass }),
+      ...(currency != null && { currency }),
       lastUpdated: new Date(),
     },
   });
