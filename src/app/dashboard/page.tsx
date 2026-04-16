@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount, useReorderAccounts } from "@/hooks/useAccounts";
 import { useLiabilities } from "@/hooks/useLiabilities";
-import { useSummary } from "@/hooks/useAnalytics";
+import { useSummary, useInvestmentPositions } from "@/hooks/useAnalytics";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useUIStore, type EditTxData } from "@/store/uiStore";
 import { formatCurrency } from "@/lib/utils/currency";
@@ -47,6 +47,7 @@ export default function InicioPage() {
   const { data: liabilityData = [] } = useLiabilities();
   const { data: summary } = useSummary();
   const { data: txData } = useTransactions({ limit: 8 });
+  const { data: posData } = useInvestmentPositions();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editAccount, setEditAccount] = useState<{ id: string; name: string; bank: string; type: string; includeInNetWorth: boolean } | null>(null);
@@ -62,7 +63,9 @@ export default function InicioPage() {
     reorderAccounts.mutate(ids);
   }
 
-  const totalAssets = accounts.filter(a => a.includeInNetWorth !== false).reduce((s, a) => s + a.balance, 0);
+  const bankAssets = accounts.filter(a => a.includeInNetWorth !== false).reduce((s, a) => s + a.balance, 0);
+  const portfolioValue = posData?.totalValue ?? 0;
+  const totalAssets = bankAssets + portfolioValue;
   const totalLiabilities = liabilityData.reduce((s, l) => s + l.balance, 0);
   const netWorth = totalAssets - totalLiabilities;
   const recentTxs = txData?.data ?? [];
