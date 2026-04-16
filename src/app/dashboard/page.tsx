@@ -3,7 +3,7 @@ import { useState } from "react";
 import {
   ChevronLeft, ChevronRight, Wallet, TrendingUp, TrendingDown,
   Plus, MoreVertical, Pencil, Trash2, ArrowLeftRight, Landmark,
-  ChevronUp, ChevronDown,
+  ChevronUp, ChevronDown, BarChart2,
 } from "lucide-react";
 import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount, useReorderAccounts } from "@/hooks/useAccounts";
 import { useLiabilities } from "@/hooks/useLiabilities";
@@ -195,6 +195,22 @@ export default function InicioPage() {
                     </DropdownMenu>
                   </div>
                 ))}
+
+            {/* Investments summary row — shown when there are positions */}
+            {portfolioValue > 0 && (
+              <a href="/investments" className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 hover:bg-emerald-500/10 transition-colors">
+                <div className="flex flex-col shrink-0 -my-1 w-[22px]" /> {/* spacer aligns with account rows */}
+                <span className="h-3 w-3 rounded-full shrink-0 bg-emerald-500" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Cartera de inversiones</p>
+                  <p className="text-xs text-muted-foreground">{(posData?.data ?? []).length} posiciones · ver detalle →</p>
+                </div>
+                <p className="text-base font-bold tabular-nums text-emerald-400 shrink-0">
+                  {formatCurrency(portfolioValue)}
+                </p>
+                <BarChart2 className="h-4 w-4 text-emerald-400/50 shrink-0" />
+              </a>
+            )}
           </div>
         </section>
 
