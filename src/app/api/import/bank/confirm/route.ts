@@ -43,10 +43,15 @@ export async function POST(req: NextRequest) {
     select: { balance: true, date: true },
   });
   if (latestTxWithBalance) {
-    // Replace any old snapshot — delete all and insert fresh one with the bank's latest balance
+    // Replace any old snapshot with the bank's latest confirmed balance.
+    // Use sentinel date (2099) so this snapshot always wins any future comparison.
     await prisma.accountBalance.deleteMany({ where: { accountId } });
     await prisma.accountBalance.create({
-      data: { accountId, balance: latestTxWithBalance.balance!, date: latestTxWithBalance.date },
+      data: {
+        accountId,
+        balance: latestTxWithBalance.balance!,
+        date: new Date("2099-12-31T23:59:59.999Z"),
+      },
     });
   }
 

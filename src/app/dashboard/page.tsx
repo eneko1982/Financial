@@ -56,7 +56,7 @@ export default function InicioPage() {
   const isCurrentMonth = selectedMonth >= currentYM;
   const asOf = isCurrentMonth ? undefined : dateTo;
 
-  const { data: accounts = [], isLoading: accountsLoading } = useAccounts(asOf);
+  const { data: accounts = [], isLoading: accountsLoading } = useAccounts();
   const { data: liabilityData = [] } = useLiabilities();
   const { data: summary } = useSummary(selectedMonth);
   const { data: posData } = useInvestmentPositions();

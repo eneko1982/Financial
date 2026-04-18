@@ -64,14 +64,13 @@ export async function GET(req: NextRequest) {
     const snap = snapshotMap.get(acc.id);
     const tx   = lastTxBalMap.get(acc.id);
     let balance: number;
-    if (snap && tx) {
-      // Both exist — prefer the one with the more recent date.
-      // On a tie, transaction balance wins (bank data is authoritative).
-      balance = tx.date >= snap.date ? (tx.balance as number) : snap.balance;
+    if (snap) {
+      // AccountBalance always wins — it's either set by the import confirm route
+      // (explicit bank balance) or by refreshBalance after a manual transaction.
+      // In both cases it's more authoritative than an individual tx.balance field.
+      balance = snap.balance;
     } else if (tx) {
       balance = tx.balance as number;
-    } else if (snap) {
-      balance = snap.balance;
     } else {
       balance = txSumMap.get(acc.id) ?? 0;
     }
