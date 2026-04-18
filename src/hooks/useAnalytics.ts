@@ -30,7 +30,7 @@ export function useCashFlow() {
     queryFn: async () => {
       const res = await fetch("/api/analytics/cashflow");
       const json = await res.json();
-      return json.data as CashFlowPoint[];
+      return (json.data ?? []) as CashFlowPoint[];
     },
   });
 }

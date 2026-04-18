@@ -118,10 +118,14 @@ function AdvisorContent() {
     }
   }
 
-  async function generateReport() {
+  async function generateReport(force = false) {
     setReportLoading(true);
     const period = new Date().toISOString().slice(0, 7);
-    const res = await fetch("/api/ai/report", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ period }) });
+    const res = await fetch("/api/ai/report", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ period, force }),
+    });
     const data = await res.json();
     if (data.data) setReport({ content: data.data.content, period });
     setReportLoading(false);
@@ -135,12 +139,20 @@ function AdvisorContent() {
 
   const ReportContent = () => (
     <>
-      <div className="p-4 border-b border-border flex items-center justify-between">
+      <div className="p-4 border-b border-border flex items-center justify-between gap-2">
         <span className="text-sm font-semibold">Informe Mensual</span>
-        <Button size="sm" variant="outline" className="gap-1.5" onClick={generateReport} disabled={reportLoading}>
-          {reportLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-          Generar
-        </Button>
+        <div className="flex gap-1.5">
+          {report && (
+            <Button size="sm" variant="ghost" className="gap-1.5 text-xs text-muted-foreground" onClick={() => generateReport(true)} disabled={reportLoading} title="Regenerar nuevo informe">
+              <RefreshCw className="h-3 w-3" />
+              Nuevo
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={() => generateReport(false)} disabled={reportLoading}>
+            {reportLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+            {report ? "Ver" : "Generar"}
+          </Button>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-4">
         {report ? (

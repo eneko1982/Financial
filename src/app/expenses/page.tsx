@@ -47,10 +47,9 @@ export default function ExpensesPage() {
     // Filter by the selected month server-side so pagination works correctly
     dateFrom: `${selectedMonth}-01`,
     dateTo: (() => {
-      const d = new Date(`${selectedMonth}-01`);
-      d.setMonth(d.getMonth() + 1);
-      d.setDate(0); // last day of selectedMonth
-      return d.toISOString().slice(0, 10);
+      const [y, m] = selectedMonth.split("-").map(Number);
+      const lastDay = new Date(y, m, 0).getDate();
+      return `${selectedMonth}-${String(lastDay).padStart(2, "0")}`;
     })(),
     page: txPage,
     limit: 200, // enough for a full month across all accounts
@@ -202,8 +201,8 @@ export default function ExpensesPage() {
                   <YAxis tickFormatter={(v) => formatCurrency(v, true)} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} width={70} />
                   <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} formatter={(v: number) => [formatCurrency(v)]} />
                   {view === "expense"
-                    ? <Bar dataKey="expenses" fill="hsl(0 84% 60%)" radius={[4,4,0,0]} maxBarSize={32} name="Gastos" />
-                    : <Bar dataKey="income" fill="hsl(142 76% 36%)" radius={[4,4,0,0]} maxBarSize={32} name="Ingresos" />
+                    ? <Bar dataKey="expenses" fill="#ef4444" radius={[4,4,0,0]} maxBarSize={32} name="Gastos" />
+                    : <Bar dataKey="income" fill="#22c55e" radius={[4,4,0,0]} maxBarSize={32} name="Ingresos" />
                   }
                 </BarChart>
               </ResponsiveContainer>

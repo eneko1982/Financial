@@ -53,18 +53,40 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
 
   await prisma.transaction.delete({ where: { id: params.id } });
 
-  // Remove this transaction's contribution from the AccountBalance snapshot
+  // Restore the account balance by reversing this transaction's contribution.
   if (tx) {
-    const snap = await prisma.accountBalance.findFirst({
-      where: { accountId: tx.accountId },
-      orderBy: { date: "desc" },
-    });
+    const [snap, lastTxBal] = await Promise.all([
+      prisma.accountBalance.findFirst({
+        where: { accountId: tx.accountId },
+        orderBy: { date: "desc" },
+      }),
+      prisma.transaction.findFirst({
+        where: { accountId: tx.accountId, balance: { not: null } },
+        orderBy: { date: "desc" },
+        select: { balance: true, date: true, id: true },
+      }),
+    ]);
+
     if (snap) {
+      // AccountBalance snapshot exists — just subtract the deleted amount
       await prisma.accountBalance.update({
         where: { id: snap.id },
         data: { balance: snap.balance - tx.amount },
       });
+    } else if (lastTxBal) {
+      // No AccountBalance but there is a tx.balance field — create a snapshot
+      // representing the balance AFTER this deletion (tx.balance minus this tx's amount,
+      // because the tx.balance already "includes" this transaction's effect).
+      await prisma.accountBalance.create({
+        data: {
+          accountId: tx.accountId,
+          balance: (lastTxBal.balance as number) - tx.amount,
+          date: new Date(),
+        },
+      });
     }
+    // If neither source exists the balance is computed dynamically as sum of amounts,
+    // so deleting the transaction automatically corrects it — no action needed.
   }
 
   invalidateFinancialContext();

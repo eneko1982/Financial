@@ -3,7 +3,7 @@ import { useState } from "react";
 import {
   ChevronLeft, ChevronRight, Wallet, TrendingUp, TrendingDown,
   Plus, MoreVertical, Pencil, Trash2, ArrowLeftRight, Landmark,
-  ChevronUp, ChevronDown, BarChart2,
+  ChevronUp, ChevronDown, BarChart2, Eye, EyeOff,
 } from "lucide-react";
 import { useAccounts, useCreateAccount, useUpdateAccount, useDeleteAccount, useReorderAccounts } from "@/hooks/useAccounts";
 import { useLiabilities } from "@/hooks/useLiabilities";
@@ -42,7 +42,7 @@ function addMonth(ym: string, delta: number) {
 }
 
 export default function InicioPage() {
-  const { selectedMonth, setSelectedMonth, setEditTx } = useUIStore();
+  const { selectedMonth, setSelectedMonth, setEditTx, includePortfolioInNetWorth, setIncludePortfolioInNetWorth } = useUIStore();
 
   // Date range for selected month (timezone-safe: use getDate() not toISOString)
   const [ymYear, ymMonth] = selectedMonth.split("-").map(Number);
@@ -79,7 +79,7 @@ export default function InicioPage() {
 
   const bankAssets = accounts.filter(a => a.includeInNetWorth !== false).reduce((s, a) => s + a.balance, 0);
   const portfolioValue = posData?.totalValue ?? 0;
-  const totalAssets = bankAssets + portfolioValue;
+  const totalAssets = bankAssets + (includePortfolioInNetWorth ? portfolioValue : 0);
   const totalLiabilities = liabilityData.reduce((s, l) => s + l.balance, 0);
   const netWorth = totalAssets - totalLiabilities;
   const recentTxs = (txData?.data ?? []).slice(0, 8);
@@ -212,18 +212,34 @@ export default function InicioPage() {
 
             {/* Investments summary row — shown when there are positions */}
             {portfolioValue > 0 && (
-              <a href="/investments" className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 hover:bg-emerald-500/10 transition-colors">
-                <div className="flex flex-col shrink-0 -my-1 w-[22px]" /> {/* spacer aligns with account rows */}
-                <span className="h-3 w-3 rounded-full shrink-0 bg-emerald-500" />
-                <div className="flex-1 min-w-0">
+              <div className={cn(
+                "flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors",
+                includePortfolioInNetWorth
+                  ? "border-emerald-500/30 bg-emerald-500/5"
+                  : "border-border bg-muted/20 opacity-60"
+              )}>
+                <div className="flex flex-col shrink-0 -my-1 w-[22px]" />
+                <span className={cn("h-3 w-3 rounded-full shrink-0", includePortfolioInNetWorth ? "bg-emerald-500" : "bg-muted-foreground")} />
+                <a href="/investments" className="flex-1 min-w-0 hover:underline">
                   <p className="text-sm font-semibold text-foreground">Cartera de inversiones</p>
-                  <p className="text-xs text-muted-foreground">{(posData?.data ?? []).length} posiciones · ver detalle →</p>
-                </div>
-                <p className="text-base font-bold tabular-nums text-emerald-400 shrink-0">
+                  <p className="text-xs text-muted-foreground">
+                    {(posData?.data ?? []).length} posiciones · ver detalle →
+                    {!includePortfolioInNetWorth && <span className="text-amber-400/80"> · excluida</span>}
+                  </p>
+                </a>
+                <p className={cn("text-base font-bold tabular-nums shrink-0", includePortfolioInNetWorth ? "text-emerald-400" : "text-muted-foreground")}>
                   {formatCurrency(portfolioValue)}
                 </p>
-                <BarChart2 className="h-4 w-4 text-emerald-400/50 shrink-0" />
-              </a>
+                <button
+                  onClick={() => setIncludePortfolioInNetWorth(!includePortfolioInNetWorth)}
+                  title={includePortfolioInNetWorth ? "Excluir del patrimonio" : "Incluir en el patrimonio"}
+                  className="rounded p-1 hover:bg-muted transition-colors shrink-0"
+                >
+                  {includePortfolioInNetWorth
+                    ? <Eye className="h-4 w-4 text-emerald-400/70" />
+                    : <EyeOff className="h-4 w-4 text-muted-foreground" />}
+                </button>
+              </div>
             )}
           </div>
         </section>

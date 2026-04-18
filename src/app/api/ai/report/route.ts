@@ -4,14 +4,19 @@ import { buildFinancialContext } from "@/lib/financial-context";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
-  const { period } = await req.json(); // "2025-03"
+  const { period, force } = await req.json(); // "2025-03", force?: true
 
   if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === "your-api-key-here") {
     return NextResponse.json({ data: null, error: "ANTHROPIC_API_KEY no configurada" }, { status: 400 });
   }
 
-  const existing = await prisma.aIReport.findUnique({ where: { period } });
-  if (existing) return NextResponse.json({ data: existing, error: null });
+  // Return cached report unless force-regenerate is requested
+  if (!force) {
+    const existing = await prisma.aIReport.findUnique({ where: { period } });
+    if (existing) return NextResponse.json({ data: existing, error: null });
+  } else {
+    await prisma.aIReport.deleteMany({ where: { period } });
+  }
 
   const context = await buildFinancialContext();
   const systemPrompt = buildSystemPrompt(context);

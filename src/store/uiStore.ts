@@ -19,6 +19,8 @@ interface UIStore {
   setAddTxOpen: (v: boolean) => void;
   editTx: EditTxData | null;
   setEditTx: (tx: EditTxData | null) => void;
+  includePortfolioInNetWorth: boolean;
+  setIncludePortfolioInNetWorth: (v: boolean) => void;
 }
 
 const nowISO = new Date().toISOString().slice(0, 7);
@@ -30,4 +32,6 @@ export const useUIStore = create<UIStore>((set) => ({
   setAddTxOpen: (v) => set({ addTxOpen: v }),
   editTx: null,
   setEditTx: (tx) => set({ editTx: tx }),
+  includePortfolioInNetWorth: true,
+  setIncludePortfolioInNetWorth: (v) => set({ includePortfolioInNetWorth: v }),
 }));
