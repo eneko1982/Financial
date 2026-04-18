@@ -28,14 +28,30 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   // If amount changed, adjust the AccountBalance snapshot so displayed balances stay correct
   if (old && body.amount !== undefined && body.amount !== old.amount) {
     const delta = (body.amount as number) - old.amount;
-    const snap = await prisma.accountBalance.findFirst({
-      where: { accountId: old.accountId },
-      orderBy: { date: "desc" },
-    });
+    const [snap, lastTxBal] = await Promise.all([
+      prisma.accountBalance.findFirst({
+        where: { accountId: old.accountId },
+        orderBy: { date: "desc" },
+      }),
+      prisma.transaction.findFirst({
+        where: { accountId: old.accountId, balance: { not: null } },
+        orderBy: { date: "desc" },
+        select: { balance: true },
+      }),
+    ]);
     if (snap) {
       await prisma.accountBalance.update({
         where: { id: snap.id },
         data: { balance: snap.balance + delta },
+      });
+    } else if (lastTxBal) {
+      // No snapshot yet — create one from the most recent imported balance + delta
+      await prisma.accountBalance.create({
+        data: {
+          accountId: old.accountId,
+          balance: (lastTxBal.balance as number) + delta,
+          date: new Date("2099-12-31T23:59:59.999Z"),
+        },
       });
     }
   }
@@ -74,14 +90,13 @@ export async function DELETE(_: NextRequest, { params }: { params: { id: string 
         data: { balance: snap.balance - tx.amount },
       });
     } else if (lastTxBal) {
-      // No AccountBalance but there is a tx.balance field — create a snapshot
-      // representing the balance AFTER this deletion (tx.balance minus this tx's amount,
-      // because the tx.balance already "includes" this transaction's effect).
+      // No AccountBalance but there is a tx.balance field — create a sentinel-dated snapshot
+      // so it always wins future comparisons against imported tx.balance fields.
       await prisma.accountBalance.create({
         data: {
           accountId: tx.accountId,
           balance: (lastTxBal.balance as number) - tx.amount,
-          date: new Date(),
+          date: new Date("2099-12-31T23:59:59.999Z"),
         },
       });
     }

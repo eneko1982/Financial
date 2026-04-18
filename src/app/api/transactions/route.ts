@@ -79,6 +79,10 @@ async function refreshBalance(accountId: string, delta: number) {
 
   let current = 0;
   if (snap && lastTx) {
+    // snap.date is either a real initial-balance date OR the sentinel date set by a
+    // previous refreshBalance call.  The sentinel (year 2099) always beats lastTx.date,
+    // so a freshly-computed snapshot is never overridden by imported tx.balance fields.
+    // A real initial-balance date CAN be overridden if a more recent imported tx exists.
     current = lastTx.date >= snap.date ? (lastTx.balance as number) : snap.balance;
   } else if (lastTx) {
     current = lastTx.balance as number;
@@ -89,6 +93,11 @@ async function refreshBalance(accountId: string, delta: number) {
     current = (agg._sum.amount ?? 0) - delta;
   }
 
+  // Use a sentinel far-future date so this computed snapshot always wins the
+  // date comparison in the GET /api/accounts route — preventing imported
+  // tx.balance fields from overriding a freshly-calculated balance.
+  const SENTINEL = new Date("2099-12-31T23:59:59.999Z");
+
   await prisma.accountBalance.deleteMany({ where: { accountId } });
-  await prisma.accountBalance.create({ data: { accountId, balance: current + delta, date: new Date() } });
+  await prisma.accountBalance.create({ data: { accountId, balance: current + delta, date: SENTINEL } });
 }
